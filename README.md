@@ -62,7 +62,7 @@ The data is processed to:
 Open the `notebook/experiment.ipynb` file in Jupyter Notebook or JupyterLab to see the data analysis process.
 
 ```bash
-jupyter notebook notebook/experiment.ipynb
+jupyter notebook notebook/etl_pipeline.ipynb
 ```
 
 ## Data Sources

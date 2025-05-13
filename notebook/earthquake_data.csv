@@ -1,0 +1,123 @@
+id,magnitude,place,time,longitude,latitude,depth,depth_category
+us7000pxht,4.6,"75 km SSE of Biak, Indonesia",2025-05-06 21:20:11.207000+07:00,136.3595,-1.7991,27.354,Shallow
+us7000pxg2,4.6,"196 km SW of Abepura, Indonesia",2025-05-06 14:13:12.258000+07:00,139.2705,-3.7314,56.973,Shallow
+us7000pxem,4.7,"85 km W of Tobelo, Indonesia",2025-05-06 08:45:48.108000+07:00,127.2424,1.6887,123.931,Intermediate
+us7000pxdu,4.9,"93 km SW of Modisi, Indonesia",2025-05-06 05:57:33.219000+07:00,123.7543,-0.0463,120.847,Intermediate
+us7000px7k,4.6,"183 km W of Tual, Indonesia",2025-05-05 15:36:59.235000+07:00,131.1014,-5.5133,69.453,Shallow
+us7000px5i,4.4,"137 km SE of Sanana, Indonesia",2025-05-05 05:39:40.780000+07:00,126.7938,-2.9968,10.0,Shallow
+us7000px3z,4.3,"150 km WNW of Tobelo, Indonesia",2025-05-04 23:00:03.968000+07:00,126.7552,2.2282,56.952,Shallow
+us7000px1y,4.6,"236 km NNW of Tobelo, Indonesia",2025-05-04 15:33:23.775000+07:00,127.159,3.6838,49.38,Shallow
+us7000pwyv,4.5,"63 km NNE of Pototano, Indonesia",2025-05-04 04:26:26.077000+07:00,117.7102,-7.8887,10.0,Shallow
+us7000pwys,4.4,Banda Sea,2025-05-04 04:13:47.179000+07:00,129.9592,-6.8264,120.086,Intermediate
+us7000pwwu,4.5,"45 km WSW of Tomohon, Indonesia",2025-05-03 21:20:50.752000+07:00,124.4235,1.1743,231.402,Intermediate
+us7000pwvy,6.0,"165 km W of Gorontalo, Indonesia",2025-05-03 19:51:45.137000+07:00,121.5769,0.501,108.386,Intermediate
+us7000pwu9,5.4,"63 km SSW of Vanimo, Papua New Guinea",2025-05-03 12:10:40.426000+07:00,140.9884,-3.1677,35.0,Shallow
+us7000pwu6,4.8,"234 km WSW of Bandar Lampung, Indonesia",2025-05-03 11:45:55.454000+07:00,103.3802,-6.4072,10.0,Shallow
+us7000pwte,4.8,"91 km S of Gambiran Satu, Indonesia",2025-05-03 09:19:19.848000+07:00,114.0138,-9.2067,67.512,Shallow
+us7000pwpd,4.1,"79 km NNW of Pototano, Indonesia",2025-05-03 00:31:48.334000+07:00,117.2277,-7.7415,299.213,Intermediate
+us7000pwj0,4.6,"14 km SSE of Bukittinggi, Indonesia",2025-05-02 14:07:44.803000+07:00,100.4292,-0.4212,10.0,Shallow
+us7000pwi1,4.5,"32 km NW of Labuan Bajo, Indonesia",2025-05-02 09:53:47.833000+07:00,119.6871,-8.2796,164.409,Intermediate
+us7000pwgn,4.9,"61 km E of Sarangani, Philippines",2025-05-02 05:26:45.571000+07:00,126.0128,5.3421,103.522,Intermediate
+us7000pwe8,4.1,"143 km N of Tobelo, Indonesia",2025-05-02 00:17:28.696000+07:00,127.9592,3.0282,135.274,Intermediate
+us7000pwb6,4.3,"166 km NNW of Maubara, Timor Leste",2025-05-01 13:54:45.778000+07:00,124.5522,-7.25,555.138,Deep
+us7000pw9v,4.9,"292 km N of Tobelo, Indonesia",2025-05-01 06:56:04.338000+07:00,128.367,4.3458,10.898,Shallow
+us7000pw9q,4.8,"287 km N of Tobelo, Indonesia",2025-05-01 06:38:26.067000+07:00,128.4159,4.2964,8.179,Shallow
+us7000pw9j,4.4,"91 km NE of Gorontalo, Indonesia",2025-05-01 06:10:14.803000+07:00,123.6525,1.1105,45.273,Shallow
+us7000pw42,4.5,"279 km N of Tobelo, Indonesia",2025-04-30 23:08:01.822000+07:00,128.1497,4.2556,57.763,Shallow
+us7000pw3z,4.4,"110 km ESE of Sarangani, Philippines",2025-04-30 22:53:49.338000+07:00,126.2903,4.8505,10.0,Shallow
+us7000pw22,4.8,"130 km NW of Tobelo, Indonesia",2025-04-30 17:24:57.717000+07:00,127.1828,2.5681,93.363,Intermediate
+us7000pw1n,4.6,"226 km ENE of Lospalos, Timor Leste",2025-04-30 15:43:29.148000+07:00,128.7458,-7.4526,127.875,Intermediate
+us7000pw11,4.7,"192 km NE of Bitung, Indonesia",2025-04-30 12:24:37.623000+07:00,126.3937,2.6257,57.165,Shallow
+us7000pvyj,4.2,"3 km WNW of Sape, Indonesia",2025-04-30 03:44:44.899000+07:00,118.9504,-8.5569,153.018,Intermediate
+us7000pvxe,4.5,"280 km WSW of Tual, Indonesia",2025-04-30 00:20:23.473000+07:00,130.5175,-6.8163,88.741,Intermediate
+us7000pvne,4.0,Celebes Sea,2025-04-29 03:32:40.817000+07:00,122.6583,3.4118,545.542,Deep
+us7000pvij,4.5,"115 km WNW of Ternate, Indonesia",2025-04-28 16:36:34.263000+07:00,126.4831,1.3006,52.31,Shallow
+us7000pvhj,4.3,"74 km SE of Gorontalo, Indonesia",2025-04-28 10:27:57.408000+07:00,123.5553,0.0787,133.032,Intermediate
+us7000pvgi,4.5,"55 km SSW of Modisi, Indonesia",2025-04-28 05:13:44.326000+07:00,124.316,-0.0388,86.009,Intermediate
+us7000pv70,5.0,"111 km S of Abepura, Indonesia",2025-04-26 13:33:17.983000+07:00,140.5988,-3.6016,35.0,Shallow
+us7000pv4p,4.5,"100 km W of Gorontalo, Indonesia",2025-04-26 04:19:50.067000+07:00,122.175,0.3772,136.523,Intermediate
+us7000pv1k,4.5,"168 km NNW of Maubara, Timor Leste",2025-04-25 22:59:44.225000+07:00,124.7854,-7.1492,502.079,Deep
+us7000puz1,4.5,"185 km NNE of Palu, Indonesia",2025-04-25 13:09:32.376000+07:00,120.5662,0.6189,10.0,Shallow
+us7000pue9,4.2,"58 km WNW of Bintuni, Indonesia",2025-04-23 10:24:13.420000+07:00,133.0651,-1.86,48.332,Shallow
+us7000pubs,4.4,"245 km ENE of Lospalos, Timor Leste",2025-04-23 02:10:41.906000+07:00,128.9263,-7.4159,143.201,Intermediate
+us7000pu62,6.2,"269 km SE of Pondaguitan, Philippines",2025-04-22 17:17:13.583000+07:00,127.7584,4.5098,117.827,Intermediate
+us7000pu61,4.9,"157 km WSW of Fakfak, Indonesia",2025-04-22 17:15:54.771000+07:00,130.9939,-3.4732,10.0,Shallow
+us7000pu5z,5.7,"141 km SSW of Banjar, Indonesia",2025-04-22 17:14:02.464000+07:00,106.7666,-8.2902,35.0,Shallow
+us7000pu5a,4.5,"153 km WSW of Fakfak, Indonesia",2025-04-22 14:14:41.137000+07:00,131.0576,-3.5392,10.0,Shallow
+us7000pu4l,4.2,"140 km SSW of Sarangani, Philippines",2025-04-22 11:09:05.302000+07:00,124.7944,4.3218,315.589,Deep
+us7000pu2y,4.7,"60 km E of Modisi, Indonesia",2025-04-22 04:28:01.482000+07:00,124.9796,0.4134,35.0,Shallow
+us6000q7hy,4.4,"55 km SW of Ternate, Indonesia",2025-04-21 14:17:45.357000+07:00,127.067,0.404,133.971,Intermediate
+us6000q7gf,4.4,"146 km WSW of Fakfak, Indonesia",2025-04-21 08:25:43.548000+07:00,131.1006,-3.4732,37.246,Shallow
+us6000q7fs,4.3,"113 km WNW of Ternate, Indonesia",2025-04-21 04:51:03.436000+07:00,126.5097,1.3121,72.007,Intermediate
+us6000q7ex,5.4,"152 km WSW of Fakfak, Indonesia",2025-04-21 01:19:50.165000+07:00,131.0017,-3.3636,10.0,Shallow
+us6000q7dp,4.2,"59 km NNE of Labuan Lombok, Indonesia",2025-04-20 18:21:02.897000+07:00,116.9372,-8.0368,277.832,Intermediate
+us6000q7b8,4.3,"132 km NNW of Kendari, Indonesia",2025-04-20 07:35:58.880000+07:00,122.2734,-2.8051,10.0,Shallow
+us6000q79z,4.8,"74 km E of Tobelo, Indonesia",2025-04-20 06:06:41.031000+07:00,128.6709,1.6553,10.0,Shallow
+us6000q78v,4.2,"118 km NNE of Tobelo, Indonesia",2025-04-20 01:00:41.901000+07:00,128.4148,2.7233,219.05,Intermediate
+us6000q78s,5.3,"38 km SW of Malisbeng, Philippines",2025-04-20 00:37:13.926000+07:00,124.1331,5.8524,35.0,Shallow
+us6000q78m,5.1,"37 km SSW of Malisbeng, Philippines",2025-04-19 23:50:51.439000+07:00,124.1788,5.8268,44.831,Shallow
+us6000q78l,5.9,"39 km SW of Malisbeng, Philippines",2025-04-19 23:11:14.473000+07:00,124.1126,5.8624,12.0,Shallow
+us6000q76s,4.4,"87 km SSE of Pondaguitan, Philippines",2025-04-19 14:44:21.584000+07:00,126.4879,5.6367,105.784,Intermediate
+us6000q71f,4.1,"201 km NE of Lospalos, Timor Leste",2025-04-18 22:39:22.602000+07:00,128.4584,-7.4213,167.023,Intermediate
+us7000pwnf,4.2,"264 km SSE of Ambon, Indonesia",2025-04-18 11:05:59.579000+07:00,128.8529,-5.9873,281.747,Intermediate
+us6000q6yj,4.7,"292 km ENE of Lospalos, Timor Leste",2025-04-18 10:44:07.267000+07:00,129.2148,-7.0695,185.866,Intermediate
+us7000pwn8,4.1,"191 km NW of Tobelo, Indonesia",2025-04-18 10:34:10.284000+07:00,126.9766,3.1176,52.982,Shallow
+us7000pwn7,4.2,"62 km W of Ternate, Indonesia",2025-04-18 09:46:06.091000+07:00,126.836,0.6909,84.523,Intermediate
+us6000q6yc,4.5,"156 km SSW of Muncar, Indonesia",2025-04-18 09:13:07.585000+07:00,114.0069,-9.8146,35.0,Shallow
+us6000q6vn,4.3,"288 km WSW of Tual, Indonesia",2025-04-18 03:09:36.557000+07:00,130.5236,-6.9774,76.157,Intermediate
+us6000q6pn,4.9,"21 km SW of Lospalos, Timor Leste",2025-04-17 14:26:41.081000+07:00,126.8716,-8.6753,25.814,Shallow
+us7000pwlh,4.4,"51 km E of Modisi, Indonesia",2025-04-17 08:04:14.068000+07:00,124.8934,0.3672,10.0,Shallow
+us6000q6n2,5.6,"46 km ESE of Modisi, Indonesia",2025-04-17 07:51:23.302000+07:00,124.8385,0.3531,10.0,Shallow
+us6000q6m1,4.1,"42 km WSW of Sinabang, Indonesia",2025-04-17 04:19:27.365000+07:00,96.02,2.348,10.0,Shallow
+us6000q6l0,4.6,"11 km SE of Labuha, Indonesia",2025-04-17 01:57:51.552000+07:00,127.5452,-0.6994,10.0,Shallow
+us7000pw6a,4.3,"106 km N of Paciran, Indonesia",2025-04-16 23:53:33.143000+07:00,112.3708,-5.9165,10.0,Shallow
+us6000q6g3,4.5,"37 km NE of Pototano, Indonesia",2025-04-16 21:07:09.149000+07:00,117.7594,-8.2177,10.0,Shallow
+us6000q6fu,4.4,"185 km SW of Tual, Indonesia",2025-04-16 20:40:01.107000+07:00,131.3957,-6.6101,35.0,Shallow
+us6000q6dq,4.7,"99 km SSE of Pondaguitan, Philippines",2025-04-16 12:22:26.845000+07:00,126.587,5.5621,10.0,Shallow
+us7000pw57,4.2,"92 km N of Labuan Bajo, Indonesia",2025-04-16 05:56:15.756000+07:00,119.7854,-7.665,429.467,Deep
+us6000q6br,5.6,"37 km SSW of Maguling, Philippines",2025-04-16 04:42:42.326000+07:00,124.2362,5.8038,10.0,Shallow
+us6000q6ad,4.2,Banda Sea,2025-04-16 02:41:03.770000+07:00,129.9459,-6.9245,133.902,Intermediate
+us6000q6a4,4.1,"258 km NE of Lospalos, Timor Leste",2025-04-16 01:52:30.253000+07:00,128.391,-6.6448,280.8,Intermediate
+us6000q628,4.4,"121 km SSW of Banjar, Indonesia",2025-04-15 05:44:01.192000+07:00,107.0684,-8.233,26.85,Shallow
+us6000q61t,4.5,"64 km ESE of Masohi, Indonesia",2025-04-15 03:43:33.954000+07:00,129.4948,-3.5425,30.493,Shallow
+us7000pvx7,4.2,"251 km WSW of Bengkulu, Indonesia",2025-04-15 02:58:43.988000+07:00,100.1104,-4.4874,10.0,Shallow
+us6000q61f,4.6,"129 km NW of Batang, Indonesia",2025-04-15 02:53:39.841000+07:00,109.9874,-5.5599,557.326,Deep
+us7000pvwy,4.3,"246 km SE of Sarangani, Philippines",2025-04-14 23:25:27.438000+07:00,126.7868,3.6117,49.172,Shallow
+us7000pvwt,4.1,"166 km NNW of Pante Makasar, Timor Leste",2025-04-14 18:57:42.773000+07:00,123.9539,-7.7542,277.844,Intermediate
+us7000pvwh,4.3,"12 km E of Labuha, Indonesia",2025-04-14 10:02:35.611000+07:00,127.5912,-0.6209,10.0,Shallow
+us6000q5w4,4.2,"282 km WSW of Tual, Indonesia",2025-04-14 09:31:17.868000+07:00,130.3682,-6.5415,157.626,Intermediate
+us6000q5vw,5.2,"145 km WSW of Ternate, Indonesia",2025-04-14 08:33:12.336000+07:00,126.109,0.4878,20.648,Shallow
+us6000q5vq,4.6,"Kepulauan Babar, Indonesia",2025-04-14 07:42:51.227000+07:00,129.7561,-7.0698,134.731,Intermediate
+us6000q5tk,5.0,"53 km WNW of Pante Makasar, Timor Leste",2025-04-14 02:35:37.070000+07:00,123.9229,-9.048,82.891,Intermediate
+us6000q5qm,4.4,"123 km SSE of Sanana, Indonesia",2025-04-13 12:39:31.770000+07:00,126.2353,-3.1448,10.0,Shallow
+us6000q5nl,4.3,"296 km S of Sanana, Indonesia",2025-04-13 04:05:05.612000+07:00,125.4941,-4.6943,450.799,Deep
+us7000pv1y,4.5,"122 km NNE of Agats, Indonesia",2025-04-12 08:51:04.458000+07:00,138.45,-4.484,10.0,Shallow
+us6000q5dq,4.5,"72 km NE of Sanana, Indonesia",2025-04-11 21:05:20.471000+07:00,126.3829,-1.5462,10.0,Shallow
+us6000q5dc,4.2,"169 km W of Abepura, Indonesia",2025-04-11 20:46:01.844000+07:00,139.1207,-2.7821,54.269,Shallow
+us6000q5bh,4.3,"60 km WSW of Tobelo, Indonesia",2025-04-11 12:26:47.966000+07:00,127.5181,1.4935,164.912,Intermediate
+us6000q59a,4.2,"124 km N of Tobelo, Indonesia",2025-04-11 04:55:40.147000+07:00,127.9117,2.8521,70.716,Intermediate
+us6000q55f,4.4,"150 km NNE of Tobelo, Indonesia",2025-04-10 23:40:41.243000+07:00,128.5664,2.9712,225.881,Intermediate
+us6000q54r,4.3,"95 km NNW of Ternate, Indonesia",2025-04-10 22:42:58.780000+07:00,127.0941,1.6055,125.774,Intermediate
+us7000pvhi,3.8,"3 km N of Caringin, Indonesia",2025-04-10 22:16:12.425000+07:00,106.8221,-6.6714,10.0,Shallow
+us6000q52k,5.3,"73 km SE of Agats, Indonesia",2025-04-10 14:53:23.652000+07:00,138.6803,-5.9218,35.0,Shallow
+us7000pusl,4.0,"140 km S of Sanana, Indonesia",2025-04-10 11:55:49.950000+07:00,126.1532,-3.3149,93.113,Intermediate
+us7000pusm,4.4,"231 km NNW of Tobelo, Indonesia",2025-04-10 09:39:07.502000+07:00,127.0535,3.5858,52.038,Shallow
+us6000q4zv,4.5,"168 km NE of Lospalos, Timor Leste",2025-04-10 03:46:35.691000+07:00,128.2068,-7.5885,179.201,Intermediate
+us6000q4x6,5.0,"208 km NNW of Tobelo, Indonesia",2025-04-09 22:21:19.073000+07:00,127.3777,3.5002,10.0,Shallow
+us6000q4wt,4.3,"174 km WNW of Labuha, Indonesia",2025-04-09 19:52:13.857000+07:00,125.9785,-0.1537,52.944,Shallow
+us6000q4vt,4.9,"213 km NNW of Tobelo, Indonesia",2025-04-09 14:25:12.864000+07:00,127.2197,3.4837,35.146,Shallow
+us7000puhj,4.4,"77 km E of Sarangani, Philippines",2025-04-09 11:05:01.526000+07:00,126.1605,5.4483,78.032,Intermediate
+us6000q4sw,5.1,"90 km SSW of Sarangani, Philippines",2025-04-09 02:25:55.660000+07:00,125.0956,4.6687,12.773,Shallow
+us6000q4rp,4.3,"83 km SSE of Pondaguitan, Philippines",2025-04-08 23:28:47.491000+07:00,126.5766,5.724,82.61,Intermediate
+us7000pu8z,4.3,"106 km E of Bitung, Indonesia",2025-04-08 14:56:02.180000+07:00,126.0824,1.3501,52.648,Shallow
+us7000pu8y,4.2,"18 km N of Sibolga, Indonesia",2025-04-08 13:25:06.570000+07:00,98.8112,1.9058,143.74,Intermediate
+us6000q4pm,4.3,Banda Sea,2025-04-08 12:40:29.560000+07:00,129.8504,-6.6179,143.794,Intermediate
+us6000q4pf,4.6,"75 km WNW of Modisi, Indonesia",2025-04-08 11:35:39.353000+07:00,123.7926,0.6606,261.034,Intermediate
+us6000q4p4,4.0,"261 km S of Ambon, Indonesia",2025-04-08 09:23:06.904000+07:00,128.0861,-6.0553,365.34,Deep
+us6000q4mg,4.2,"158 km SSW of Pagar Alam, Indonesia",2025-04-08 04:28:30.364000+07:00,102.8593,-5.4057,47.493,Shallow
+us6000q4lv,5.8,"64 km SE of Sinabang, Indonesia",2025-04-08 02:49:20.552000+07:00,96.7622,2.0388,18.0,Shallow
+us6000q4i0,4.3,"32 km SW of Nabire, Indonesia",2025-04-07 17:52:40.368000+07:00,135.3302,-3.6007,10.0,Shallow
+us6000q4gy,4.3,"58 km SW of Poso, Indonesia",2025-04-07 10:36:35.831000+07:00,120.4579,-1.8351,10.0,Shallow
+us6000q4g7,4.6,"130 km E of Tual, Indonesia",2025-04-07 07:18:14.932000+07:00,133.9258,-5.5529,10.0,Shallow
+us6000q4g5,4.3,"281 km WSW of Tual, Indonesia",2025-04-07 07:11:53.672000+07:00,130.2953,-6.2941,151.265,Intermediate
+us6000q4f9,4.3,"56 km NNE of Insrom, Indonesia",2025-04-07 02:22:05.494000+07:00,136.2698,-0.6937,10.0,Shallow

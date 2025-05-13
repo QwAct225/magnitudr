@@ -5,11 +5,11 @@
       <list>
         <JupyterConnectionParameters>
           <option name="authType" value="notebook" />
-          <option name="token" value="2a86a7bd53c0b301b89ddb78bef5468a8343824dee90a825" />
+          <option name="token" value="" />
           <option name="urlString" value="http://localhost:8888/" />
           <authParams2>
             <map>
-              <entry key="token" value="2a86a7bd53c0b301b89ddb78bef5468a8343824dee90a825" />
+              <entry key="token" value="" />
             </map>
           </authParams2>
         </JupyterConnectionParameters>
@@ -20,14 +20,14 @@
         <entry key="$PROJECT_DIR$/.idea/magnitudr.iml">
           <value>
             <JupyterConnectionParameters>
-              <option name="authType" value="notebook" />
-              <option name="token" value="2a86a7bd53c0b301b89ddb78bef5468a8343824dee90a825" />
-              <option name="urlString" value="http://localhost:8888/" />
-              <authParams2>
+              <option name="argv" value="--no-browser --port=8888 --NotebookApp.token='' " />
+              <option name="managed" value="true" />
+              <option name="sdkName" value="" />
+              <option name="environmentVariables">
                 <map>
-                  <entry key="token" value="2a86a7bd53c0b301b89ddb78bef5468a8343824dee90a825" />
+                  <entry name="PYTHONPATH" value="C:\Danann\1. Projects\2. Machine Learning\Python\magnitudr " />
                 </map>
-              </authParams2>
+              </option>
             </JupyterConnectionParameters>
           </value>
         </entry>

@@ -6,7 +6,7 @@ This repository contains a data analysis project for earthquake data from USGS, 
 
 ### System Requirements
 - **Operating System**: Windows 10/11 (or Linux/MacOS)
-- **Python Version**: 3.11.5
+- **Python Version**: 3.11.*
 - **Package Manager**: pip 25.0.1
 
 ## Project Structure

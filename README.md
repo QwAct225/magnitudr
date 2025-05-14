@@ -6,7 +6,7 @@ This repository contains a data analysis project for earthquake data from USGS, 
 
 ### System Requirements
 - **Operating System**: Windows 10/11 (or Linux/MacOS)
-- **Python Version**: 3.11.5
+- **Python Version**: 3.11.*
 - **Package Manager**: pip 25.0.1
 
 ## Project Structure
@@ -62,7 +62,7 @@ The data is processed to:
 Open the `notebook/experiment.ipynb` file in Jupyter Notebook or JupyterLab to see the data analysis process.
 
 ```bash
-jupyter notebook notebook/experiment.ipynb
+jupyter notebook notebook/etl_pipeline.ipynb
 ```
 
 ## Data Sources

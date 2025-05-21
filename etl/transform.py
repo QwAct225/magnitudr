@@ -1,10 +1,13 @@
 # etl/transform.py
-import pandas as pd
 
-def transform_data(df: pd.DataFrame) -> pd.DataFrame:
-    # Bersihkan nilai null dan ubah waktu ke datetime
-    df_clean = df.dropna(subset=["mag", "time"])
-    df_clean["time"] = pd.to_datetime(df_clean["time"], unit="ms")
-    df_clean = df_clean[df_clean["mag"] >= 1.0]  # contoh filter
+def transform_data(df: pd.DataFrame) -> pd.DataFrame: # type: ignore
+    # 1. Filter gempa dengan magnitudo > 4.0
+    df = df[df['Magnitude'] > 4.0]
 
-    return df_clean
+    # 2. Hapus duplikat (berdasarkan tanggal dan lokasi)
+    df = df.drop_duplicates(subset=['Date', 'Location'])
+
+    # 3. Buat kolom baru 'Region' dari lokasi (misal split by comma)
+    df['Region'] = df['Location'].apply(lambda x: x.split(',')[-1].strip() if ',' in x else 'Unknown')
+
+    return df

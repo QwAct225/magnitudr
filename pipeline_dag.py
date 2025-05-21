@@ -1,23 +1,17 @@
 # pipeline_dag.py
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from etl.extract import extract_earthquake_data  # type: ignore
-from etl.transform import transform_data         # type: ignore
+from etl.extract import extract_earthquake_data
 
-def main():
-    print("🔍 Extracting data...")
-    df_raw = extract_earthquake_data()
-    print(f"✅ Extracted {len(df_raw)} rows")
+def run_pipeline():
+    print("🔄 Starting ETL pipeline...")
 
-    print("🛠 Transforming data...")
-    df_clean = transform_data(df_raw)
-    print(f"✅ Transformed into {len(df_clean)} cleaned rows")
+    # Extract
+    print("📥 Extracting data...")
+    df = extract_earthquake_data()
+    print(f"✅ Extracted {len(df)} earthquake records")
 
-    print("💾 Saving to 'earthquake_clean.csv'...")
-    df_clean.to_csv("earthquake_clean.csv", index=False)
-    print("🎉 Done!")
+    # Display the first 5 rows
+    print(df.head())
 
 if __name__ == "__main__":
-    main()
+    run_pipeline()

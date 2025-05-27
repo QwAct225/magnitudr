@@ -50,11 +50,13 @@ def create_spark_df(earthquakes):
 
 
 def transform_data(df):
+    # Filter out earthquakes outside the specified region (Indonesia)
     df = df.filter(
         (col("longitude").between(95, 141)) &
         (col("latitude").between(-11, 6))
     )
 
+    # Convert depth to category
     df = df.withColumn(
         "depth_category",
         when(col("depth") <= 70, "Shallow")
@@ -62,6 +64,7 @@ def transform_data(df):
         .otherwise("Deep")
     )
 
+    # Convert time to datetime and localize to Asia/Jakarta timezone
     df = df.withColumn("time_utc", to_timestamp(from_unixtime(col("time") / 1000)))
 
     df_pd = df.toPandas()

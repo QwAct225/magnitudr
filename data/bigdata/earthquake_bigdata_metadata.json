@@ -1,10 +1,10 @@
 {
-  "collection_date": "2025-06-05T00:01:40.432047",
-  "total_records": 22409,
+  "collection_date": "2025-06-05T00:53:17.054809",
+  "total_records": 48785,
   "file_sizes_mb": {
-    "csv": 12.678959846496582,
-    "parquet": 2.3929452896118164,
-    "json": 29.687167167663574
+    "csv": 27.58625316619873,
+    "parquet": 3.516757011413574,
+    "json": 64.62912654876709
   },
   "data_sources": [
     "indonesia",
@@ -140,5 +140,5 @@
     "stress_drop_estimate"
   ],
   "target_size_mb": 64,
-  "actual_size_mb": 29.687167167663574
+  "actual_size_mb": 64.62912654876709
 }

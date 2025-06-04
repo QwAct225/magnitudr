@@ -462,40 +462,50 @@ class BigDataCollector:
         """Main method to collect big earthquake dataset with accurate file size check"""
         logger.info(f"Starting big data collection (target: {self.target_size_mb} MB)")
 
-        # Step 1: Collect raw earthquake data
+        # Hapus semua file lama di folder output_dir sebelum mulai koleksi baru
+        for f in self.output_dir.glob('*'):
+            try:
+                f.unlink()
+            except Exception as e:
+                logger.warning(f"Failed to delete old file {f}: {e}")
+
         all_data = []
-        for region_name, region_bounds in self.regions.items():
-            logger.info(f"Collecting data for region: {region_name}")
-            date_ranges = self.generate_date_ranges(2020, 2024)
-            for date_range in date_ranges:
-                if self._is_target_size_reached(all_data):
-                    logger.info("Target file size reached, stopping collection.")
+        target_reached = False
+
+        # Loop terus ke semua region dan semua date_range sampai target size tercapai
+        while not target_reached:
+            for region_name, region_bounds in self.regions.items():
+                logger.info(f"Collecting data for region: {region_name}")
+                date_ranges = self.generate_date_ranges(2020, 2024)
+                for date_range in date_ranges:
+                    params = {
+                        'format': 'geojson',
+                        'starttime': date_range['starttime'],
+                        'endtime': date_range['endtime'],
+                        'minmagnitude': 2.5,
+                        'minlatitude': region_bounds['minlat'],
+                        'maxlatitude': region_bounds['maxlat'],
+                        'minlongitude': region_bounds['minlon'],
+                        'maxlongitude': region_bounds['maxlon'],
+                        'limit': 20000
+                    }
+                    features = self.fetch_earthquake_data(params, f"{region_name}_{date_range['starttime']}")
+                    all_data.extend(features)
+                    logger.info(f"Current raw data count: {len(all_data)}")
+
+                    # Enhance and save temporarily to check file size
+                    if len(all_data) % 5000 == 0 or len(all_data) > 20000:
+                        enhanced_data = self.enhance_earthquake_data(all_data)
+                        temp_result = self.save_big_data(enhanced_data, filename_prefix='temp_earthquake_bigdata')
+                        logger.info(f"Current max file size: {temp_result['total_size_mb']:.2f} MB")
+                        if temp_result['total_size_mb'] >= self.target_size_mb:
+                            logger.info("Target file size reached after enhancement, stopping collection.")
+                            target_reached = True
+                            break
+                if target_reached:
                     break
-                params = {
-                    'format': 'geojson',
-                    'starttime': date_range['starttime'],
-                    'endtime': date_range['endtime'],
-                    'minmagnitude': 2.5,
-                    'minlatitude': region_bounds['minlat'],
-                    'maxlatitude': region_bounds['maxlat'],
-                    'minlongitude': region_bounds['minlon'],
-                    'maxlongitude': region_bounds['maxlon'],
-                    'limit': 20000
-                }
-                features = self.fetch_earthquake_data(params, f"{region_name}_{date_range['starttime']}")
-                all_data.extend(features)
-                logger.info(f"Current raw data count: {len(all_data)}")
-                # Enhance and save temporarily to check file size
-                if len(all_data) % 5000 == 0 or self._is_target_size_reached(all_data):
-                    enhanced_data = self.enhance_earthquake_data(all_data)
-                    temp_result = self.save_big_data(enhanced_data, filename_prefix='temp_earthquake_bigdata')
-                    logger.info(f"Current CSV size: {temp_result['total_size_mb']:.2f} MB")
-                    if temp_result['total_size_mb'] >= self.target_size_mb:
-                        logger.info("Target file size reached after enhancement, stopping collection.")
-                        all_data = all_data[:len(enhanced_data)]  # Trim to last enhanced
-                        break
-            if self._is_target_size_reached(all_data):
-                break
+            if not target_reached:
+                logger.info("All regions and date ranges processed, but target size not reached. Repeating collection with more data...")
 
         # Step 2: Enhance data with ML features (final)
         enhanced_data = self.enhance_earthquake_data(all_data)
@@ -518,19 +528,21 @@ class BigDataCollector:
         return result
 
     def _is_target_size_reached(self, data):
-        """Helper to check if target file size is reached using CSV size"""
+        """Check if any output file (CSV/JSON/Parquet) has reached the target size"""
         if not data:
             return False
         try:
-            df = pd.DataFrame(self.enhance_earthquake_data(data[-1000:]))  # Only last batch for speed
-            temp_path = self.output_dir / 'temp_check.csv'
-            df.to_csv(temp_path, index=False)
-            size_mb = os.path.getsize(temp_path) / (1024 * 1024)
-            temp_path.unlink()
-            # Estimate total size
-            estimated_total = (size_mb / len(df)) * len(data) if len(df) > 0 else 0
-            logger.info(f"Estimated total CSV size: {estimated_total:.2f} MB")
-            return estimated_total >= self.target_size_mb
+            enhanced = self.enhance_earthquake_data(data)
+            temp_result = self.save_big_data(enhanced, filename_prefix='temp_earthquake_bigdata_check')
+            size = temp_result['total_size_mb']
+            # Cleanup temp files
+            for f in self.output_dir.glob('temp_earthquake_bigdata_check*'):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+            logger.info(f"Actual temp file size: {size:.2f} MB")
+            return size >= self.target_size_mb
         except Exception as e:
             logger.warning(f"Size check failed: {e}")
             return False

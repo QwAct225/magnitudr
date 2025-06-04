@@ -1,0 +1,144 @@
+{
+  "collection_date": "2025-06-05T00:01:40.432047",
+  "total_records": 22409,
+  "file_sizes_mb": {
+    "csv": 12.678959846496582,
+    "parquet": 2.3929452896118164,
+    "json": 29.687167167663574
+  },
+  "data_sources": [
+    "indonesia",
+    "pacific_ring",
+    "japan",
+    "philippines",
+    "chile"
+  ],
+  "date_range_collected": [
+    {
+      "starttime": "2020-01-01",
+      "endtime": "2020-03-31"
+    },
+    {
+      "starttime": "2020-04-01",
+      "endtime": "2020-06-30"
+    },
+    {
+      "starttime": "2020-07-01",
+      "endtime": "2020-09-29"
+    },
+    {
+      "starttime": "2020-09-30",
+      "endtime": "2020-12-29"
+    },
+    {
+      "starttime": "2020-12-30",
+      "endtime": "2021-03-30"
+    },
+    {
+      "starttime": "2021-03-31",
+      "endtime": "2021-06-29"
+    },
+    {
+      "starttime": "2021-06-30",
+      "endtime": "2021-09-28"
+    },
+    {
+      "starttime": "2021-09-29",
+      "endtime": "2021-12-28"
+    },
+    {
+      "starttime": "2021-12-29",
+      "endtime": "2022-03-29"
+    },
+    {
+      "starttime": "2022-03-30",
+      "endtime": "2022-06-28"
+    },
+    {
+      "starttime": "2022-06-29",
+      "endtime": "2022-09-27"
+    },
+    {
+      "starttime": "2022-09-28",
+      "endtime": "2022-12-27"
+    },
+    {
+      "starttime": "2022-12-28",
+      "endtime": "2023-03-28"
+    },
+    {
+      "starttime": "2023-03-29",
+      "endtime": "2023-06-27"
+    },
+    {
+      "starttime": "2023-06-28",
+      "endtime": "2023-09-26"
+    },
+    {
+      "starttime": "2023-09-27",
+      "endtime": "2023-12-26"
+    },
+    {
+      "starttime": "2023-12-27",
+      "endtime": "2024-03-26"
+    },
+    {
+      "starttime": "2024-03-27",
+      "endtime": "2024-06-25"
+    },
+    {
+      "starttime": "2024-06-26",
+      "endtime": "2024-09-24"
+    },
+    {
+      "starttime": "2024-09-25",
+      "endtime": "2024-12-24"
+    },
+    {
+      "starttime": "2024-12-25",
+      "endtime": "2024-12-31"
+    }
+  ],
+  "features_included": [
+    "id",
+    "magnitude",
+    "place",
+    "time",
+    "updated",
+    "longitude",
+    "latitude",
+    "depth",
+    "felt",
+    "cdi",
+    "mmi",
+    "alert",
+    "status",
+    "tsunami",
+    "sig",
+    "net",
+    "code",
+    "ids",
+    "sources",
+    "types",
+    "nst",
+    "dmin",
+    "rms",
+    "gap",
+    "magType",
+    "type",
+    "url",
+    "detail",
+    "energy_magnitude",
+    "distance_from_surface",
+    "regional_risk_score",
+    "temporal_features",
+    "intensity_composite",
+    "data_quality_score",
+    "tectonic_setting",
+    "population_exposure",
+    "seismic_moment",
+    "stress_drop_estimate"
+  ],
+  "target_size_mb": 64,
+  "actual_size_mb": 29.687167167663574
+}

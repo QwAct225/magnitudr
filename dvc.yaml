@@ -4,23 +4,9 @@ stages:
     deps:
       - scripts/run_spark_ml_processing.py
       - data/bigdata/earthquake_bigdata.csv
-    outs:
-      - data/spark_output/earthquakes_final_processed.parquet
-      - data/spark_output/earthquakes_spark_processed.parquet
 
   evaluation:
     cmd: python3 scripts/run_spark_evaluation.py
     deps:
       - scripts/run_spark_evaluation.py
       - data/bigdata/earthquake_bigdata.csv
-    outs:
-      - data/reports/clustering_analysis_results.csv
-      - data/reports/data_validation_report.json
-      - data/reports/depth_analysis_results.csv
-      - data/reports/depth_analysis_results.csv
-      - data/reports/high_risk_analysis_results.csv
-      - data/reports/monthly_trends_results.csv
-      - data/reports/performance_report.json
-      - data/reports/query_execution_summary.json
-      - data/reports/spark_etl_dashboard.png
-      - data/reports/top_magnitude_earthquakes_results.csv

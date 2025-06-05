@@ -1,0 +1,85 @@
+schema: '2.0'
+stages:
+  batch_etl_ml:
+    cmd: python3 scripts/run_spark_ml_processing.py
+    deps:
+    - path: data/bigdata/earthquake_bigdata.csv
+      hash: md5
+      md5: 103fbde5dd7e38a2d14e3167bb0d087f
+      size: 29868450
+      isexec: true
+    - path: scripts/run_spark_ml_processing.py
+      hash: md5
+      md5: 6f8355c380fd380c146d0ce3d6d500f5
+      size: 32269
+      isexec: true
+    outs:
+    - path: data/spark_output/earthquakes_final_processed.parquet
+      hash: md5
+      md5: ef90e730c08fa9622ddcdbd448d5e854.dir
+      size: 7371670
+      nfiles: 6
+    - path: data/spark_output/earthquakes_spark_processed.parquet
+      hash: md5
+      md5: 2c1e6364ca3638978d16a7a487d5d3a2.dir
+      size: 7371670
+      nfiles: 6
+  evaluation:
+    cmd: python3 scripts/run_spark_evaluation.py
+    deps:
+    - path: data/bigdata/earthquake_bigdata.csv
+      hash: md5
+      md5: 103fbde5dd7e38a2d14e3167bb0d087f
+      size: 29868450
+      isexec: true
+    - path: scripts/run_spark_evaluation.py
+      hash: md5
+      md5: 3b585e978528b3b87b948ed68a00884c
+      size: 36487
+      isexec: true
+    outs:
+    - path: data/reports/clustering_analysis_results.csv
+      hash: md5
+      md5: 63e4dc2fc74b630c11a172def8f9bd9e
+      size: 356524
+      isexec: true
+    - path: data/reports/data_validation_report.json
+      hash: md5
+      md5: eea4ebb7865c89ef386d761dde5584a1
+      size: 1782
+      isexec: true
+    - path: data/reports/depth_analysis_results.csv
+      hash: md5
+      md5: cdabfac847cb627c43474330c3f5a3e8
+      size: 159
+      isexec: true
+    - path: data/reports/high_risk_analysis_results.csv
+      hash: md5
+      md5: 2e802ee69798c0729270d565e702e4af
+      size: 333
+      isexec: true
+    - path: data/reports/monthly_trends_results.csv
+      hash: md5
+      md5: dc02ebe5686f950bba9e6be24e0c5816
+      size: 1212
+      isexec: true
+    - path: data/reports/performance_report.json
+      hash: md5
+      md5: 6a33fdec0d2223db55213cd7e1e8011d
+      size: 243
+      isexec: true
+    - path: data/reports/query_execution_summary.json
+      hash: md5
+      md5: 3146bc5292a8634081370cd6fe6f4a42
+      size: 311
+      isexec: true
+    - path: data/reports/spark_etl_dashboard.png
+      hash: md5
+      md5: 512aadeb349d65341a9769da808238ad
+      size: 957386
+      isexec: true
+    - path: data/reports/top_magnitude_earthquakes_results.csv
+      hash: md5
+      md5: 18a03a0cfa7cb19edb561c69f387d44a
+      size: 1144
+      isexec: true

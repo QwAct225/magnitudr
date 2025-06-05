@@ -1,0 +1,5 @@
+outs:
+- md5: f63e07f2861ffd8f1cd0c5b86f0a844a
+  size: 67286926
+  hash: md5
+  path: earthquake_bigdata.json

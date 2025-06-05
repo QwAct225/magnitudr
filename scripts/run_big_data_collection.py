@@ -176,14 +176,24 @@ class BigDataCollector:
     def enhance_earthquake_data(self, earthquake_features):
         """Enhance earthquake data with additional computed features"""
         enhanced_data = []
-        
         logger.info("Enhancing earthquake data with computed features...")
-        
+
         for feature in earthquake_features:
             try:
                 properties = feature.get('properties', {})
                 geometry = feature.get('geometry', {})
                 coordinates = geometry.get('coordinates', [0, 0, 0])
+
+                # Convert time from ms timestamp to ISO string
+                raw_time = properties.get('time')
+                if raw_time is not None:
+                    try:
+                        # USGS time is in ms since epoch
+                        iso_time = datetime.utcfromtimestamp(raw_time / 1000).strftime('%Y-%m-%dT%H:%M:%SZ')
+                    except Exception:
+                        iso_time = ''
+                else:
+                    iso_time = ''
                 
                 # Basic earthquake data
                 enhanced_record = {
@@ -191,7 +201,7 @@ class BigDataCollector:
                     'id': feature.get('id', ''),
                     'magnitude': properties.get('mag'),
                     'place': properties.get('place', ''),
-                    'time': properties.get('time'),
+                    'time': iso_time,
                     'updated': properties.get('updated'),
                     'longitude': coordinates[0] if len(coordinates) > 0 else None,
                     'latitude': coordinates[1] if len(coordinates) > 1 else None,
@@ -233,11 +243,10 @@ class BigDataCollector:
                 }
                 
                 enhanced_data.append(enhanced_record)
-                
             except Exception as e:
                 logger.warning(f"Error enhancing earthquake record {feature.get('id', 'unknown')}: {e}")
                 continue
-        
+
         logger.info(f"Enhanced {len(enhanced_data)} earthquake records")
         return enhanced_data
     

@@ -265,7 +265,51 @@ curl http://localhost:8081 # Spark Worker
 # Stop
 $SPARK_HOME/sbin/stop-master.sh # Stop master
 $SPARK_HOME/sbin/stop-worker.sh # Stop worker
+
+# Verify status PostgreSQL
+sudo service postgresql status
+# Bila down maka bisa melakukan ini
+sudo service postgresql start
+
+# Lakukan ini untuk pembuatan database
+# Masuk ke postgresql sebagai superuser
+psql -U postgres
+# Ganti password user
+ALTER USER postgres WITH PASSWORD 'password_baru_anda';
+# Keluar dari psql
+\q
+
+# Setelah reset bisa langsung masuk sebagai User
+psql -U postgres -h localhost -W
+# Buat database
+CREATE DATABASE magnitudr;
+
+# CREATE DATABASE nama_database;    -- Membuat database baru
+# \l                -- Melihat daftar database
+# \c earthquake     -- Masuk ke database earthquake
+# \dt               -- Melihat tabel di database tersebut
+# SELECT * FROM nama_table;         -- Menampilkan seluruh isi data dalam table
+# DROP TABLE nama_table;            -- Menghapus table
+# \q                -- Keluar shell
 ``` 
+**Note:**  Configurasi yang harus running di background saat testing !!
+1. Spark Master
+```bash
+export SPARK_HOME=/opt/spark
+$SPARK_HOME/sbin/start-master.sh
+```
+2. Spark Worker
+```bash
+$SPARK_HOME/sbin/start-worker.sh spark://localhost:7077
+```
+3. PostgreSQL
+```bash
+sudo service postgresql start
+
+# Verify PostgreSQL
+jps
+```
+
 ### STEP 3: Big Data Collection
 
 #### 3.1 Execute Data Collection
@@ -294,58 +338,17 @@ head -1 ./data/bigdata/earthquake_bigdata.csv | tr ',' '\n' | wc -l
 # Should show ~30+ columns with enhanced features
 ```
 
-### STEP 4: Spark ETL Execution
+### STEP 4: Spark ETL Execution, Testing, and Validating
 
-#### 4.1 Run Batch Processing
+#### 4.1 Run Repro Pipeline DAG DVC
 ```bash
 # Execute Spark ETL pipeline
 cd magnitudr
 
-python3 scripts/run_spark_ml_processing.py # Linux (Recommended)
+# Execute all transformation (ML Processing and Evaluation)
+dvc repro
 
 # Monitor progress:
 # - Spark UI: http://localhost:4040
 # - Master UI: http://localhost:8080
-
-# Bila terjadi error midway coba lakukan ini
-sudo service postgresql status
-# Bila down maka bisa melakukan ini
-sudo service postgresql start
-
-# Lakukan ini untuk pembuatan database
-# Masuk ke postgresql sebagai superuser
-psql -U postgres
-# Ganti password user
-ALTER USER postgres WITH PASSWORD 'password_baru_anda';
-# Keluar dari psql
-\q
-
-# Setelah reset bisa langsung masuk sebagai User
-psql -U postgres -h localhost -W
-# Buat database
-CREATE DATABASE magnitudr;
-
-# CREATE DATABASE nama_database;    -- Membuat database baru
-# \l                -- Melihat daftar database
-# \c earthquake     -- Masuk ke database earthquake
-# \dt               -- Melihat tabel di database tersebut
-# SELECT * FROM nama_table;         -- Menampilkan seluruh isi data dalam table
-# DROP TABLE nama_table;            -- Menghapus table
-# \q                -- Keluar shell
-```
-
-### STEP 5: Validation & Testing
-
-#### 5.1 Run Complete Validation
-```bash
-# Execute validation suite
-python3 scripts/run_spark_evaluation.py
-
-# Generates:
-# - Batching with PySpark and Hadoop
-# - Data quality validation report
-# - Performance metrics
-# - Query execution results
-# - Visualization dashboard
-
 ```

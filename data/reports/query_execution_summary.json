@@ -1,0 +1,14 @@
+{
+  "execution_timestamp": "2025-06-05T16:20:06.749505",
+  "queries_executed": 6,
+  "successful_queries": 6,
+  "failed_queries": 0,
+  "query_list": [
+    "top_magnitude_earthquakes",
+    "earthquakes_by_zone",
+    "monthly_trends",
+    "depth_analysis",
+    "high_risk_analysis",
+    "clustering_analysis"
+  ]
+}

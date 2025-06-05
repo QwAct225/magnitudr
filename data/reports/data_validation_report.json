@@ -1,0 +1,70 @@
+{
+  "table_name": "earthquakes_spark_processed",
+  "validation_timestamp": "2025-06-05T16:20:06.134905",
+  "tests": {
+    "record_count": {
+      "value": 22409,
+      "status": "PASS",
+      "threshold": "> 0"
+    },
+    "magnitude_quality": {
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "status": "PASS",
+      "threshold": "< 5% null values"
+    },
+    "latitude_quality": {
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "status": "PASS",
+      "threshold": "< 5% null values"
+    },
+    "longitude_quality": {
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "status": "PASS",
+      "threshold": "< 5% null values"
+    },
+    "depth_quality": {
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "status": "PASS",
+      "threshold": "< 5% null values"
+    },
+    "magnitude_range": {
+      "min_magnitude": 2.5,
+      "max_magnitude": 7.6,
+      "avg_magnitude": 4.4588290419028045,
+      "valid_range_percentage": 100.0,
+      "status": "PASS",
+      "threshold": "> 95% in valid range (2.5-9.5)"
+    },
+    "geographic_distribution": {
+      "zones_found": 2,
+      "distribution": [
+        {
+          "geographic_zone": "Eastern Hemisphere",
+          "zone_count": 16249,
+          "avg_magnitude": 4.493888854698764
+        },
+        {
+          "geographic_zone": "Western Hemisphere",
+          "zone_count": 6160,
+          "avg_magnitude": 4.366347402597404
+        }
+      ],
+      "status": "PASS",
+      "threshold": "> 0 geographic zones identified"
+    },
+    "temporal_coverage": {
+      "min_year": 2020,
+      "max_year": 2024,
+      "year_span": 4,
+      "unique_years": 5,
+      "unique_months": 12,
+      "status": "PASS",
+      "threshold": "> 1 year of data coverage"
+    }
+  },
+  "overall_status": "PASS"
+}

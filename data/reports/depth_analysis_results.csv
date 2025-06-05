@@ -1,0 +1,4 @@
+depth_category_detailed,count,avg_magnitude,avg_depth,avg_risk_score
+Shallow,12829,4.51,28.9,0.492
+Intermediate,8658,4.39,142.2,0.643
+Deep,922,4.35,451.1,1.08

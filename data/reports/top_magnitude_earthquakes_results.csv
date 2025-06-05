@@ -1,0 +1,11 @@
+id,magnitude,place,latitude,longitude,depth,geographic_zone,risk_score
+us7000lff4,7.6,"19 km E of Gamut, Philippines",8.5266,126.4161,40.0,Eastern Hemisphere,0.8171428571428572
+us7000j36j,7.6,"Pulau Pulau Tanimbar, Indonesia",-7.0586,130.009,104.95,Eastern Hemisphere,0.9099285714285714
+us7000n05d,7.4,"41 km ESE of San Pedro de Atacama, Chile",-23.0791,-67.8404,127.291,Western Hemisphere,0.9218442857142857
+us7000n05d,7.4,"41 km ESE of San Pedro de Atacama, Chile",-23.0791,-67.8404,127.291,Western Hemisphere,0.9218442857142857
+us7000g7lx,7.3,"125 km NNE of Lospalos, Timor Leste",-7.5482,127.5773,165.49,Eastern Hemisphere,0.9664142857142857
+us6000gc2a,7.3,Flores Sea,-7.6033,122.2274,14.27,Eastern Hemisphere,0.7503857142857142
+us6000h519,7.3,"57 km ENE of Namie, Japan",37.7132,141.5793,41.0,Eastern Hemisphere,0.7885714285714286
+us7000jvl3,7.1,"171 km SSE of Teluk Dalam, Indonesia",-0.8082,98.5112,34.0,Eastern Hemisphere,0.7585714285714286
+us7000krjx,7.1,"180 km NNE of Gili Air, Indonesia",-6.7888,116.5211,500.0,Eastern Hemisphere,1.4242857142857144
+us7000l9h4,7.1,Banda Sea,-6.416,129.5466,6.0,Eastern Hemisphere,0.7185714285714285

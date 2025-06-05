@@ -1,0 +1,11 @@
+{
+  "report_timestamp": "2025-06-05T16:20:06.755405",
+  "system_info": {
+    "cpu_count": 8,
+    "total_memory_gb": 7.71,
+    "available_memory_gb": 5.5,
+    "disk_usage_percent": 90.0
+  },
+  "spark_performance": {},
+  "recommendations": []
+}

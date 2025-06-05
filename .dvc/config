@@ -1,0 +1,7 @@
+[core]
+    remote = storage
+['remote "storage"']
+    url = gdrive://1sqFpnYNdy-ABgB2eN2597hMFwItgblv5
+    gdrive_use_service_account = true
+    gdrive_service_account_json_file_path = ../my-dvc-credential.json
+    gdrive_service_account_user_email = dvc-rdv-credential-access@my-dvc-credential.iam.gserviceaccount.com

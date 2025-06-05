@@ -1,0 +1,5 @@
+outs:
+- md5: 103fbde5dd7e38a2d14e3167bb0d087f
+  size: 29868450
+  hash: md5
+  path: earthquake_bigdata.csv

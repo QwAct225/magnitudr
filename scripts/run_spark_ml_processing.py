@@ -11,9 +11,8 @@ import logging
 from datetime import datetime
 import pandas as pd
 import numpy as np
-
-# Spark imports
 import findspark
+import yaml
 findspark.init()
 
 from pyspark.sql import SparkSession
@@ -108,34 +107,54 @@ class SparkEarthquakeETL:
             logger.error(f"❌ Failed to initialize Spark: {e}")
             return False
     
+    def _resolve_dvc_data_path(self, dvc_file):
+        """
+        Jika file input adalah file .dvc, ambil path data aslinya dari file DVC.
+        """
+        dvc_file = Path(dvc_file)
+        if not dvc_file.exists() or not dvc_file.suffix == ".dvc":
+            return str(dvc_file)
+        with open(dvc_file, "r") as f:
+            dvc_yaml = yaml.safe_load(f)
+        # Ambil path dari outs
+        outs = dvc_yaml.get("outs", [])
+        if outs and "path" in outs[0]:
+            # Path relatif terhadap lokasi file .dvc
+            data_path = dvc_file.parent / outs[0]["path"]
+            return str(data_path)
+        raise FileNotFoundError(f"Data path not found in {dvc_file}")
+
     def extract_data(self, file_path=None, file_format='parquet'):
         """
         EXTRACT: Load big data from various sources
-        Supports CSV, Parquet, JSON formats
+        Supports CSV, Parquet, JSON formats, and DVC-tracked files
         """
         logger.info("🔄 EXTRACT: Loading earthquake big data...")
-        
+
         if file_path is None:
             file_path = self.data_dir / f'earthquake_bigdata.{file_format}'
-        
+
+        # === Tambahan: resolve jika file_path adalah .dvc ===
+        file_path = self._resolve_dvc_data_path(file_path)
+
         try:
-            if file_format.lower() == 'parquet':
+            if str(file_path).lower().endswith('.parquet'):
                 df = self.spark.read.parquet(str(file_path))
-            elif file_format.lower() == 'csv':
+            elif str(file_path).lower().endswith('.csv'):
                 df = self.spark.read.option("header", "true").option("inferSchema", "true").csv(str(file_path))
-            elif file_format.lower() == 'json':
+            elif str(file_path).lower().endswith('.json'):
                 df = self.spark.read.json(str(file_path))
             else:
-                raise ValueError(f"Unsupported file format: {file_format}")
-            
+                raise ValueError(f"Unsupported file format: {file_path}")
+
             logger.info(f"✅ Data loaded successfully from {file_path}")
             logger.info(f"📊 Schema:")
             df.printSchema()
             logger.info(f"📊 Record count: {df.count():,}")
             logger.info(f"📊 Partition count: {df.rdd.getNumPartitions()}")
-            
+
             return df
-            
+
         except Exception as e:
             logger.error(f"❌ Error loading data from {file_path}: {e}")
             return None
@@ -313,7 +332,7 @@ class SparkEarthquakeETL:
         TRANSFORM 3: Machine Learning Preprocessing
         """
         logger.info("🔄 TRANSFORM 3: ML Preprocessing...")
-        
+
         # 1. Select features for ML
         numerical_features = [
             'magnitude', 'depth', 'latitude', 'longitude',
@@ -322,16 +341,27 @@ class SparkEarthquakeETL:
             'ring_of_fire_distance', 'energy_release_log', 'risk_score',
             'population_impact_estimate', 'tectonic_activity_score'
         ]
-        
         categorical_features = [
             'alert_standardized', 'magnitude_category', 'depth_category_detailed',
             'geographic_zone', 'season', 'magType', 'type'
         ]
-        
+
         # Filter existing columns
         numerical_features = [col for col in numerical_features if col in df.columns]
         categorical_features = [col for col in categorical_features if col in df.columns]
-        
+
+        # ====== Tambahkan ini: isi NULL pada kolom numerik ======
+        for column in numerical_features:
+            if column in df.columns:
+                median_list = df.approxQuantile(column, [0.5], 0.01)
+                median_val = median_list[0] if median_list else 0.0
+                df = df.fillna({column: median_val})
+
+        # ====== Tambahkan ini: isi NULL pada kolom kategorikal ======
+        for column in categorical_features:
+            if column in df.columns:
+                df = df.fillna({column: 'unknown'})
+
         logger.info(f"Numerical features: {len(numerical_features)}")
         logger.info(f"Categorical features: {len(categorical_features)}")
         
@@ -633,9 +663,10 @@ class SparkEarthquakeETL:
         
         # Save final processed data
         self._save_as_parquet(df_clustered, "earthquakes_final_processed")
+        # Save processed parquet for DVC
+        self._save_as_parquet(df_clustered, "earthquakes_spark_processed")
         
         logger.info("✅ Batch processing completed successfully!")
-        
         return df_clustered
     
     def run_stream_processing(self, input_path, checkpoint_location=None):

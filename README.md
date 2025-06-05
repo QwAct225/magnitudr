@@ -306,6 +306,32 @@ python3 scripts/run_spark_ml_processing.py # Linux (Recommended)
 # Monitor progress:
 # - Spark UI: http://localhost:4040
 # - Master UI: http://localhost:8080
+
+# Bila terjadi error midway coba lakukan ini
+sudo service postgresql status
+# Bila down maka bisa melakukan ini
+sudo service postgresql start
+
+# Lakukan ini untuk pembuatan database
+# Masuk ke postgresql sebagai superuser
+psql -U postgres
+# Ganti password user
+ALTER USER postgres WITH PASSWORD 'password_baru_anda';
+# Keluar dari psql
+\q
+
+# Setelah reset bisa langsung masuk sebagai User
+psql -U postgres -h localhost -W
+# Buat database
+CREATE DATABASE magnitudr;
+
+# CREATE DATABASE nama_database;    -- Membuat database baru
+# \l                -- Melihat daftar database
+# \c earthquake     -- Masuk ke database earthquake
+# \dt               -- Melihat tabel di database tersebut
+# SELECT * FROM nama_table;         -- Menampilkan seluruh isi data dalam table
+# DROP TABLE nama_table;            -- Menghapus table
+# \q                -- Keluar shell
 ```
 
 ### STEP 5: Validation & Testing

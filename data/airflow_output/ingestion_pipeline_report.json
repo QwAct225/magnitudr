@@ -1,0 +1,6 @@
+{
+    "pipeline_name": "Test Ingestion",
+    "status": "SUCCESS",
+    "summary": {"total_records": 3},
+    "creation_timestamp": "2025-06-10T19:01:07+07:00"
+}

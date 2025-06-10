@@ -1,0 +1,21 @@
+[2025-06-10T22:53:08.134+0700] {local_task_job_runner.py:123} INFO - ::group::Pre task execution logs
+[2025-06-10T22:53:08.211+0700] {taskinstance.py:2603} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: earthquake_data_ingestion.extract_raw_data manual__2025-06-10T15:52:48+00:00 [queued]>
+[2025-06-10T22:53:08.243+0700] {taskinstance.py:2603} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: earthquake_data_ingestion.extract_raw_data manual__2025-06-10T15:52:48+00:00 [queued]>
+[2025-06-10T22:53:08.248+0700] {taskinstance.py:2856} INFO - Starting attempt 1 of 3
+[2025-06-10T22:53:08.296+0700] {taskinstance.py:2879} INFO - Executing <Task(PythonOperator): extract_raw_data> on 2025-06-10 15:52:48+00:00
+[2025-06-10T22:53:08.313+0700] {standard_task_runner.py:72} INFO - Started process 16992 to run task
+[2025-06-10T22:53:08.331+0700] {standard_task_runner.py:104} INFO - Running: ['airflow', 'tasks', 'run', 'earthquake_data_ingestion', 'extract_raw_data', 'manual__2025-06-10T15:52:48+00:00', '--job-id', '8', '--raw', '--subdir', 'DAGS_FOLDER/ingestion.py', '--cfg-path', '/tmp/tmpk3bchxem']
+[2025-06-10T22:53:08.348+0700] {standard_task_runner.py:105} INFO - Job 8: Subtask extract_raw_data
+[2025-06-10T22:53:08.684+0700] {task_command.py:467} INFO - Running <TaskInstance: earthquake_data_ingestion.extract_raw_data manual__2025-06-10T15:52:48+00:00 [running]> on host DESKTOP-1U3MHTH.
+[2025-06-10T22:53:09.204+0700] {taskinstance.py:3122} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='magnitudr-team' AIRFLOW_CTX_DAG_ID='earthquake_data_ingestion' AIRFLOW_CTX_TASK_ID='extract_raw_data' AIRFLOW_CTX_EXECUTION_DATE='2025-06-10T15:52:48+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-06-10T15:52:48+00:00'
+[2025-06-10T22:53:09.211+0700] {taskinstance.py:731} INFO - ::endgroup::
+[2025-06-10T22:53:09.712+0700] {ingestion.py:92} INFO - 📥 Extracting earthquake data from USGS API...
+[2025-06-10T22:53:09.716+0700] {ingestion.py:112} INFO - Extracting data from 2025-06-03 to 2025-06-10
+[2025-06-10T22:53:10.534+0700] {ingestion.py:156} INFO - ✅ Extracted 17 earthquake records
+[2025-06-10T22:53:10.540+0700] {ingestion.py:157} INFO - 📁 Raw data saved to: /home/naufal/magnitudr/data/airflow_output/raw_earthquake_data.json
+[2025-06-10T22:53:10.679+0700] {python.py:240} INFO - Done. Returned value was: 17
+[2025-06-10T22:53:10.792+0700] {taskinstance.py:340} INFO - ::group::Post task execution logs
+[2025-06-10T22:53:10.800+0700] {taskinstance.py:352} INFO - Marking task as SUCCESS. dag_id=earthquake_data_ingestion, task_id=extract_raw_data, run_id=manual__2025-06-10T15:52:48+00:00, execution_date=20250610T155248, start_date=20250610T155308, end_date=20250610T155310
+[2025-06-10T22:53:10.883+0700] {local_task_job_runner.py:261} INFO - Task exited with return code 0
+[2025-06-10T22:53:10.990+0700] {taskinstance.py:3891} INFO - 1 downstream tasks scheduled from follow-on schedule check
+[2025-06-10T22:53:11.000+0700] {local_task_job_runner.py:240} INFO - ::endgroup::

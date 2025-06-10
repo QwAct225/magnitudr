@@ -1,0 +1,95 @@
+  ____________       _____________
+ ____    |__( )_________  __/__  /________      __
+____  /| |_  /__  ___/_  /_ __  /_  __ \_ | /| / /
+___  ___ |  / _  /   _  __/ _  / / /_/ /_ |/ |/ /
+ _/_/  |_/_/  /_/    /_/    /_/  \____/____/|__/
+[2025-06-09T14:54:13.505+0700] {_client.py:1025} INFO - HTTP Request: GET https://apacheairflow.gateway.scarf.sh/scheduler?version=2.10.0&python_version=3.10.12&platform=Linux&arch=x86_64&database=postgresql&db_version=14.18&executor=SequentialExecutor "HTTP/1.1 200 OK"
+[2025-06-09T14:54:14.032+0700] {executor_loader.py:254} INFO - Loaded executor: SequentialExecutor
+[2025-06-09T14:54:14.361+0700] {scheduler_job_runner.py:935} INFO - Starting the scheduler
+[2025-06-09T14:54:14.366+0700] {scheduler_job_runner.py:942} INFO - Processing each file at most -1 times
+[2025-06-09T14:54:14.385+0700] {manager.py:174} INFO - Launched DagFileProcessorManager with pid: 4496
+[2025-06-09T14:54:14.395+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T14:54:14.427+0700] {scheduler_job_runner.py:1866} INFO - Marked 1 SchedulerJob instances as failed
+[2025-06-09T14:54:14.427+0700] {settings.py:63} INFO - Configured default timezone Asia/Jakarta
+[2025-06-09 14:54:14 +0700] [4495] [INFO] Starting gunicorn 23.0.0
+[2025-06-09 14:54:14 +0700] [4495] [ERROR] Connection in use: ('::', 8793)
+[2025-06-09 14:54:14 +0700] [4495] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
+[2025-06-09 14:54:15 +0700] [4495] [ERROR] Connection in use: ('::', 8793)
+[2025-06-09 14:54:15 +0700] [4495] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
+[2025-06-09 14:54:16 +0700] [4495] [ERROR] Connection in use: ('::', 8793)
+[2025-06-09 14:54:16 +0700] [4495] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
+[2025-06-09 14:54:17 +0700] [4495] [ERROR] Connection in use: ('::', 8793)
+[2025-06-09 14:54:17 +0700] [4495] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
+[2025-06-09 14:54:18 +0700] [4495] [ERROR] Connection in use: ('::', 8793)
+[2025-06-09 14:54:18 +0700] [4495] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
+[2025-06-09 14:54:19 +0700] [4495] [ERROR] Can't[2025-06-09 21:27:21 +0700] [3878] [INFO] Worker exiting (pid: 3878)
+[2025-06-09 21:27:21 +0700] [3879] [INFO] Worker exiting (pid: 3879)
+[2025-06-09 21:27:21 +0700] [3876] [INFO] Handling signal: term
+[2025-06-09 21:27:21 +0700] [3876] [INFO] Shutting down: Master
+e dag runs
+[2025-06-09T15:09:14.632+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:14:14.702+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:19:14.776+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:24:14.845+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:29:14.969+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:34:15.068+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:39:15.126+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:44:15.155+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:49:15.213+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:54:15.271+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T15:59:15.336+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:04:15.396+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:09:15.449+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:14:15.514+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:19:15.560+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:24:15.609+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:29:15.700+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:34:15.777+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:39:15.847+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:44:15.886+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:49:15.949+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:54:16.023+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T16:59:16.085+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:04:16.148+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:09:16.214+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:14:16.277+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:19:16.345+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:24:16.410+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:29:16.447+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:34:16.563+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:39:16.647+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:44:16.736+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:49:16.799+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:54:16.857+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T17:59:16.930+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:04:16.943+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:09:16.999+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:14:17.056+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:19:17.116+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:24:17.184+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:29:17.244+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:34:17.309+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:39:17.395+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:44:17.454+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:49:17.515+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:54:17.579+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T18:59:17.616+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:04:17.676+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:09:17.695+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:14:17.757+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:19:17.813+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:24:17.875+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:29:17.940+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:34:18.002+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:39:18.072+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:44:18.131+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:49:18.195+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:54:18.302+0700] {scheduler_job_runner.py:1843} INFO - Adopting or resetting orphaned tasks for active dag runs
+[2025-06-09T19:56:49.089+0700] {scheduler_job_runner.py:260} INFO - Exiting gracefully upon receiving signal 15
+[2025-06-09T19:56:50.257+0700] {process_utils.py:132} INFO - Sending Signals.SIGTERM to group 4496. PIDs of all processes in the group: [4496]
+[2025-06-09T19:56:50.323+0700] {process_utils.py:87} INFO - Sending the signal Signals.SIGTERM to group 4496
+[2025-06-09T19:57:23.742+0700] {process_utils.py:80} INFO - Process psutil.Process(pid=4496, status='terminated', exitcode=0, started='14:54:13') (4496) terminated with exit code 0
+[2025-06-09T19:57:23.775+0700] {process_utils.py:132} INFO - Sending Signals.SIGTERM to group 4496. PIDs of all processes in the group: []
+[2025-06-09T19:57:23.779+0700] {process_utils.py:87} INFO - Sending the signal Signals.SIGTERM to group 4496
+[2025-06-09T19:57:23.785+0700] {process_utils.py:101} INFO - Sending the signal Signals.SIGTERM to process 4496 as process group is missing.
+[2025-06-09T19:57:23.790+0700] {scheduler_job_runner.py:1014} INFO - Exited execute loop

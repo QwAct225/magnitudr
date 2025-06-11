@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: magnitudr_postgres
+    environment:
+      POSTGRES_DB: magnitudr
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: earthquake123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - magnitudr_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  airflow:
+    build: ./airflow
+    container_name: magnitudr_airflow
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:earthquake123@postgres:5432/magnitudr
+      - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSHMpQfGjO_wfRcEoOIaTZxPqHFE=
+      - AIRFLOW__WEBSERVER__SECRET_KEY=earthquake_secret_key_2025
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=false
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - MAGNITUDR_PROJECT_PATH=/opt/airflow/magnitudr
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/operators:/opt/airflow/operators
+      - ./airflow/utils:/opt/airflow/utils
+      - ./data:/opt/airflow/magnitudr/data
+      - ./my-dvc-credential.json:/opt/airflow/my-dvc-credential.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - magnitudr_network
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@magnitudr.com &&
+        airflow webserver --port 8080 & airflow scheduler
+      "
+
+  api:
+    build: ./api
+    container_name: magnitudr_api
+    environment:
+      - DATABASE_URL=postgresql://postgres:earthquake123@postgres:5432/magnitudr
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    networks:
+      - magnitudr_network
+    volumes:
+      - ./data:/app/data
+
+  streamlit:
+    build: ./streamlit
+    container_name: magnitudr_streamlit
+    environment:
+      - API_BASE_URL=http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    networks:
+      - magnitudr_network
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  postgres_data:
+
+networks:
+  magnitudr_network:
+    driver: bridge

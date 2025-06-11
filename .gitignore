@@ -2,3 +2,5 @@ venv
 243_25659_43-pycharm-support-libs.zip
 .env
 myenv
+logs
+airflow/logs

@@ -11,7 +11,7 @@ sys.path.append('/opt/airflow/operators')
 default_args = {
     'owner': 'magnitudr-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 10),  # Yesterday - must be in past for auto scheduling
+    'start_date': datetime(2025, 6, 10),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -22,10 +22,10 @@ default_args = {
 dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
-    description='🌍 Master earthquake analysis pipeline - production ready',
+    description='🌍 Master earthquake analysis pipeline with ML - production ready',
     schedule_interval='0 19 * * *',  # Daily at 02:00 WIB (19:00 UTC) - Best practice
     max_active_runs=1,
-    tags=['earthquake', 'master', 'production']
+    tags=['earthquake', 'master', 'production', 'ml']
 )
 
 def run_usgs_ingestion(**context):
@@ -166,7 +166,9 @@ def run_ml_training(**context):
     except Exception as e:
         logging.error(f"❌ ML training failed: {e}")
         raise
-    """Step 5: Generate master pipeline report"""
+
+def generate_master_report(**context):
+    """Step 6: Generate master pipeline report with ML metrics"""
     logging.info("📋 Generating master pipeline report...")
     
     try:
@@ -197,27 +199,31 @@ def run_ml_training(**context):
         """)
         risk_distribution = dict(cursor.fetchall())
         
+        cursor.close()
+        conn.close()
+        
         # Get ML model metrics if available
         try:
-            import json
             metrics_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_metrics.json'
             if os.path.exists(metrics_path):
                 with open(metrics_path, 'r') as f:
                     ml_metrics = json.load(f)
-                report['ml_model_performance'] = {
+                report_ml_metrics = {
                     'accuracy': ml_metrics.get('accuracy', 0),
                     'f1_score': ml_metrics.get('f1_score', 0),
                     'precision': ml_metrics.get('precision', 0),
                     'recall': ml_metrics.get('recall', 0)
                 }
-        except:
-            report['ml_model_performance'] = {'status': 'not_available'}
+            else:
+                report_ml_metrics = {'status': 'model_not_found'}
+        except Exception as e:
+            report_ml_metrics = {'status': 'error', 'message': str(e)}
         
         report = {
-            'pipeline_name': 'Magnitudr Master Production Pipeline',
+            'pipeline_name': 'Magnitudr Master Production Pipeline with ML',
             'execution_timestamp': datetime.now().isoformat(),
             'status': 'SUCCESS',
-            'schedule': 'Daily at 14:43 WIB',
+            'schedule': 'Daily at 02:00 WIB',
             'data_statistics': {
                 'total_earthquakes': total_earthquakes,
                 'total_clusters': total_clusters,
@@ -225,9 +231,12 @@ def run_ml_training(**context):
                 'risk_distribution': risk_distribution,
                 'data_coverage': '2014-2025 (11 years)'
             },
+            'ml_model_performance': report_ml_metrics,
             'system_endpoints': {
                 'api_docs': 'http://localhost:8000/docs',
                 'api_health': 'http://localhost:8000/health',
+                'ml_predictions': 'http://localhost:8000/ml/predictions',
+                'ml_metrics': 'http://localhost:8000/ml/model-metrics',
                 'dashboard': 'http://localhost:8501',
                 'airflow': 'http://localhost:8080'
             },
@@ -240,11 +249,13 @@ def run_ml_training(**context):
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2)
         
-        logging.info(f"🎉 MASTER PIPELINE PRODUCTION READY!")
+        logging.info(f"🎉 MASTER PIPELINE WITH ML COMPLETED!")
         logging.info(f"📊 Earthquakes: {total_earthquakes:,}")
         logging.info(f"🔬 Clusters: {total_clusters}")
         logging.info(f"🚨 High-risk zones: {high_risk_zones}")
+        logging.info(f"🤖 ML Model: {report_ml_metrics.get('status', 'Available')}")
         logging.info(f"🎯 Dashboard: http://localhost:8501")
+        logging.info(f"🤖 ML API: http://localhost:8000/ml/predictions")
         
         return str(report_path)
         

@@ -1,6 +1,55 @@
-venv
-243_25659_43-pycharm-support-libs.zip
+# Airflow specific
+airflow/logs/
+airflow/dags/__pycache__/
+airflow/operators/__pycache__/
+airflow/utils/__pycache__/
+*.pyc
+*.pyo
+
+# Data files (large datasets)
+data/bigdata/
+data/spark_output/
+data/airflow_output/
+data/plots/
+
+# Environment & secrets
 .env
-myenv
-logs
-airflow/logs
+*.log
+my-dvc-credential.json
+
+# Python
+__pycache__/
+.venv/
+venv/
+myenv/
+*.egg-info/
+
+# Docker volumes
+postgres_data/
+airflow_data/
+
+# Scripts (deprecated)
+*.sh
+airflow/backup/
+airflow/*.sh
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temporary files
+*.tmp
+*.temp

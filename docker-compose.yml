@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.3
     container_name: magnitudr_postgres
     environment:
       POSTGRES_DB: magnitudr
@@ -37,21 +37,13 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      # Project root mount (includes DVC context)
+      - .:/opt/airflow/magnitudr
+      
       # Airflow specific mounts
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/operators:/opt/airflow/operators
       - ./airflow/utils:/opt/airflow/utils
-      
-      # Project root mount (includes DVC context)
-      - .:/opt/airflow/magnitudr
-      
-      # Alternative: Specific mounts if needed
-      # - ./data:/opt/airflow/magnitudr/data
-      # - ./.dvc:/opt/airflow/magnitudr/.dvc
-      # - ./dvc.yaml:/opt/airflow/magnitudr/dvc.yaml
-      # - ./dvc.lock:/opt/airflow/magnitudr/dvc.lock
-      # - ./my-dvc-credential.json:/opt/airflow/magnitudr/my-dvc-credential.json
-      # - ./.git:/opt/airflow/magnitudr/.git
     depends_on:
       postgres:
         condition: service_healthy

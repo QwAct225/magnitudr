@@ -8,11 +8,11 @@ import logging
 default_args = {
     'owner': 'magnitudr-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 11),
+    'start_date': datetime(2025, 6, 11, 20, 20),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    'retry_delay': timedelta(minutes=2),  # Faster retry for testing
     'catchup': False
 }
 
@@ -21,9 +21,10 @@ dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
     description='🌍 Master pipeline for earthquake analysis and hazard detection',
-    schedule_interval='@daily',  # Run daily
+    schedule_interval='*/10 * * * *',  # Every 10 minutes for testing
+    # schedule_interval='@daily',     # Use this for production
     max_active_runs=1,
-    tags=['earthquake', 'master', 'pipeline']
+    tags=['earthquake', 'master', 'pipeline', 'testing']
 )
 
 def check_system_health(**context):
@@ -79,15 +80,23 @@ def generate_pipeline_report(**context):
         'status': 'SUCCESS',
         'stages': [
             'System Health Check',
-            'Data Ingestion', 
-            'Spatial Processing',
+            'Data Ingestion (USGS API)', 
+            'Spatial Processing (ETL)',
             'DBSCAN Clustering',
             'API Data Availability'
         ],
+        'endpoints_ready': {
+            'api_docs': 'http://localhost:8000/docs',
+            'earthquake_data': 'http://localhost:8000/earthquakes',
+            'clusters': 'http://localhost:8000/clusters',
+            'statistics': 'http://localhost:8000/stats'
+        },
+        'dashboard': 'http://localhost:8501',
         'next_steps': [
             'Check FastAPI endpoints at http://localhost:8000/docs',
             'Access Streamlit dashboard at http://localhost:8501',
-            'Review cluster analysis and hazard zones'
+            'Review cluster analysis and hazard zones',
+            'Verify 64MB data requirement compliance'
         ],
         'timestamp': datetime.now().isoformat()
     }

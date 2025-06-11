@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from datetime import datetime
 import logging
 from decimal import Decimal
+import decimal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -56,14 +57,18 @@ class EarthquakeData(BaseModel):
     latitude: float
     longitude: float
     depth: float
-    time: Optional[datetime] = None
+    time: Optional[datetime] = None  # Make datetime optional
     place: Optional[str] = ""
     spatial_density: Optional[float] = None
     hazard_score: Optional[float] = None
     region: Optional[str] = None
     magnitude_category: Optional[str] = None
     depth_category: Optional[str] = None
-    risk_zone: Optional[str] = None  # Added risk_zone field
+    risk_zone: Optional[str] = None
+
+    class Config:
+        # Allow None values for datetime
+        arbitrary_types_allowed = True
 
 class ClusterData(BaseModel):
     id: str
@@ -225,14 +230,14 @@ async def get_earthquakes(
                 latitude=safe_float(row[2]),
                 longitude=safe_float(row[3]),
                 depth=safe_float(row[4]),
-                time=row[5],
+                time=row[5] if row[5] is not None else None,  # Handle None time
                 place=str(row[6]) if row[6] else "",
                 spatial_density=safe_float(row[7]),
                 hazard_score=safe_float(row[8]),
                 region=str(row[9]) if row[9] else "Unknown",
                 magnitude_category=str(row[10]) if row[10] else "Unknown",
                 depth_category=str(row[11]) if row[11] else "Unknown",
-                risk_zone=str(row[12]) if row[12] else "Unknown"  # Added risk_zone
+                risk_zone=str(row[12]) if row[12] else "Unknown"
             ))
         
         logger.info(f"✅ Retrieved {len(earthquakes)} earthquake records")
@@ -250,7 +255,7 @@ async def get_clusters(
     """Get DBSCAN clustering results"""
     try:
         query = """
-        SELECT DISTINCT
+        SELECT 
             c.id, c.cluster_id, 
             COALESCE(c.cluster_label, 'Unknown') as cluster_label, 
             COALESCE(c.risk_zone, 'Unknown') as risk_zone,
@@ -272,7 +277,7 @@ async def get_clusters(
             query += " AND c.cluster_size >= :min_cluster_size"
             params['min_cluster_size'] = min_cluster_size
         
-        query += " ORDER BY c.cluster_size DESC LIMIT 1000"
+        query += " ORDER BY COALESCE(c.cluster_size, 0) DESC LIMIT 1000"
         
         with get_db_connection() as conn:
             result = conn.execute(text(query), params)
@@ -376,14 +381,22 @@ async def get_system_stats():
                 WHERE risk_level IN ('High', 'Extreme')
             """)).fetchone()
             
-            # Safe value extraction with proper type handling
+            # Safe value extraction with proper decimal handling
             total_earthquakes = safe_int(earthquake_result[0]) if earthquake_result and earthquake_result[0] else 0
             avg_hazard = safe_float(earthquake_result[1]) if earthquake_result and earthquake_result[1] else 0.0
             total_clusters = safe_int(cluster_result[0]) if cluster_result and cluster_result[0] else 0
             high_risk_zones = safe_int(risk_result[0]) if risk_result and risk_result[0] else 0
             
-            # Calculate data quality score (safe division)
-            data_quality = min(avg_hazard / 10.0, 1.0) if avg_hazard > 0 else 0.0
+            # Calculate data quality score with bulletproof error handling
+            try:
+                if avg_hazard and avg_hazard > 0:
+                    # Convert decimal to float safely
+                    hazard_float = float(str(avg_hazard))
+                    data_quality = min(hazard_float / 10.0, 1.0)
+                else:
+                    data_quality = 0.0
+            except (TypeError, ValueError, ZeroDivisionError, decimal.InvalidOperation):
+                data_quality = 0.0
         
         stats = SystemStats(
             total_earthquakes=total_earthquakes,

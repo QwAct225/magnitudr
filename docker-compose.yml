@@ -55,12 +55,12 @@ services:
       - magnitudr_network
     command: >
       bash -c "
-        echo '🔧 Initializing Airflow...' &&
+        echo 'Initializing Airflow...' &&
         cd /opt/airflow/magnitudr &&
         airflow db init &&
-        echo '👤 Creating admin user...' &&
+        echo 'Creating admin user...' &&
         airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@magnitudr.com &&
-        echo '🚀 Starting Airflow services...' &&
+        echo 'Starting Airflow services...' &&
         airflow scheduler &
         airflow webserver --port 8080
       "

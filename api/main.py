@@ -89,12 +89,21 @@ class HazardZone(BaseModel):
     center_lon: float
     boundary_coordinates: Optional[str] = ""
 
-class SystemStats(BaseModel):
-    total_earthquakes: int
-    total_clusters: int
-    high_risk_zones: int
-    last_update: datetime
-    data_quality_score: float
+class MLPrediction(BaseModel):
+    earthquake_id: str
+    predicted_risk_zone: str
+    prediction_confidence: float
+    model_version: str
+    created_at: datetime
+
+class ModelMetrics(BaseModel):
+    model_name: str
+    model_type: str
+    accuracy: float
+    precision_score: float
+    recall_score: float
+    f1_score: float
+    training_samples: int
 
 def safe_float(value):
     """Safely convert any numeric type to float"""
@@ -255,7 +264,7 @@ async def get_clusters(
     """Get DBSCAN clustering results"""
     try:
         query = """
-        SELECT 
+        SELECT DISTINCT
             c.id, c.cluster_id, 
             COALESCE(c.cluster_label, 'Unknown') as cluster_label, 
             COALESCE(c.risk_zone, 'Unknown') as risk_zone,
@@ -277,7 +286,7 @@ async def get_clusters(
             query += " AND c.cluster_size >= :min_cluster_size"
             params['min_cluster_size'] = min_cluster_size
         
-        query += " ORDER BY COALESCE(c.cluster_size, 0) DESC LIMIT 1000"
+        query += " ORDER BY c.cluster_size DESC LIMIT 1000"
         
         with get_db_connection() as conn:
             result = conn.execute(text(query), params)
@@ -442,8 +451,181 @@ async def get_regions():
         return {"regions": regions}
         
     except Exception as e:
-        logger.error(f"❌ Failed to retrieve regions: {e}")
-        raise HTTPException(status_code=500, detail=f"Regions query failed: {str(e)}")
+class SystemStats(BaseModel):
+    total_earthquakes: int
+    total_clusters: int
+    high_risk_zones: int
+    last_update: datetime
+    data_quality_score: float
+    ml_model_available: bool = False
+
+@app.get("/ml/predictions", response_model=List[MLPrediction], summary="Get ML Predictions")
+async def get_ml_predictions(
+    limit: int = Query(default=1000, le=10000, description="Maximum number of predictions"),
+    min_confidence: Optional[float] = Query(default=None, description="Minimum prediction confidence")
+):
+    """
+    🤖 **Get ML model predictions for earthquake risk zones**
+    
+    - **limit**: Maximum predictions to return
+    - **min_confidence**: Filter by minimum prediction confidence (0.0-1.0)
+    
+    Returns ML-generated risk zone predictions with confidence scores.
+    """
+    try:
+        query = """
+        SELECT 
+            earthquake_id, predicted_risk_zone, prediction_confidence, 
+            model_version, created_at
+        FROM earthquake_predictions
+        WHERE 1=1
+        """
+        
+        params = {}
+        
+        if min_confidence is not None:
+            query += " AND prediction_confidence >= :min_confidence"
+            params['min_confidence'] = min_confidence
+        
+        query += " ORDER BY prediction_confidence DESC LIMIT :limit"
+        params['limit'] = limit
+        
+        with get_db_connection() as conn:
+            result = conn.execute(text(query), params)
+            data = result.fetchall()
+        
+        predictions = []
+        for row in data:
+            predictions.append(MLPrediction(
+                earthquake_id=str(row[0]),
+                predicted_risk_zone=str(row[1]),
+                prediction_confidence=safe_float(row[2]),
+                model_version=str(row[3]),
+                created_at=row[4] if row[4] else datetime.now()
+            ))
+        
+        logger.info(f"✅ Retrieved {len(predictions)} ML predictions")
+        return predictions
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to retrieve ML predictions: {e}")
+        raise HTTPException(status_code=500, detail=f"ML predictions query failed: {str(e)}")
+
+@app.get("/ml/model-metrics", response_model=List[ModelMetrics], summary="Get ML Model Performance")
+async def get_model_metrics():
+    """
+    📊 **Get ML model performance metrics**
+    
+    Returns training metrics including accuracy, precision, recall, F1-score.
+    """
+    try:
+        query = """
+        SELECT 
+            model_name, model_type, accuracy, precision_score, 
+            recall_score, f1_score, training_samples
+        FROM ml_model_metadata
+        ORDER BY created_at DESC
+        """
+        
+        with get_db_connection() as conn:
+            result = conn.execute(text(query))
+            data = result.fetchall()
+        
+        metrics = []
+        for row in data:
+            metrics.append(ModelMetrics(
+                model_name=str(row[0]),
+                model_type=str(row[1]),
+                accuracy=safe_float(row[2]),
+                precision_score=safe_float(row[3]),
+                recall_score=safe_float(row[4]),
+                f1_score=safe_float(row[5]),
+                training_samples=safe_int(row[6])
+            ))
+        
+        logger.info(f"✅ Retrieved {len(metrics)} model metrics")
+        return metrics
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to retrieve model metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Model metrics query failed: {str(e)}")
+
+@app.post("/ml/predict", summary="Predict Risk Zone for Coordinates")
+async def predict_risk_zone(
+    latitude: float = Query(..., description="Latitude coordinate"),
+    longitude: float = Query(..., description="Longitude coordinate"),
+    magnitude: float = Query(default=4.0, description="Earthquake magnitude"),
+    depth: float = Query(default=50.0, description="Earthquake depth in km")
+):
+    """
+    🎯 **Predict risk zone for given coordinates**
+    
+    - **latitude**: Geographic latitude
+    - **longitude**: Geographic longitude  
+    - **magnitude**: Expected earthquake magnitude (default: 4.0)
+    - **depth**: Expected earthquake depth in km (default: 50.0)
+    
+    Returns predicted risk zone with confidence score.
+    """
+    try:
+        import joblib
+        import numpy as np
+        import pandas as pd
+        
+        # Load model components
+        model_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model.pkl'
+        scaler_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_scaler.pkl'
+        encoder_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_label_encoder.pkl'
+        
+        if not all(os.path.exists(p) for p in [model_path, scaler_path, encoder_path]):
+            raise HTTPException(status_code=503, detail="ML model not available. Please train model first.")
+        
+        model = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+        label_encoder = joblib.load(encoder_path)
+        
+        # Prepare features (same as training)
+        features = {
+            'latitude': latitude,
+            'longitude': longitude, 
+            'magnitude': magnitude,
+            'depth': depth,
+            'spatial_density': 0.1,  # Default value
+            'hazard_score': magnitude * 2,  # Estimated
+            'distance_from_jakarta': np.sqrt((latitude + 6.2088) ** 2 + (longitude - 106.8456) ** 2),
+            'distance_from_ring_of_fire': min(abs(latitude + 5), abs(longitude - 120)),
+            'magnitude_depth_ratio': magnitude / (depth + 1),
+            'energy_density': 0.1 * (magnitude ** 2),
+            'shallow_earthquake': 1 if depth < 70 else 0,
+            'high_magnitude': 1 if magnitude > 5.0 else 0,
+            'lat_lon_interaction': latitude * longitude,
+            'hazard_spatial_interaction': (magnitude * 2) * 0.1
+        }
+        
+        # Convert to DataFrame and scale
+        X = pd.DataFrame([features])
+        X_scaled = scaler.transform(X)
+        
+        # Make prediction
+        prediction = model.predict(X_scaled)[0]
+        probabilities = model.predict_proba(X_scaled)[0]
+        confidence = float(np.max(probabilities))
+        
+        # Decode prediction
+        predicted_zone = label_encoder.inverse_transform([prediction])[0]
+        
+        return {
+            "coordinates": {"latitude": latitude, "longitude": longitude},
+            "input_parameters": {"magnitude": magnitude, "depth": depth},
+            "predicted_risk_zone": predicted_zone,
+            "prediction_confidence": round(confidence, 4),
+            "model_version": "v1.0",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Risk zone prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

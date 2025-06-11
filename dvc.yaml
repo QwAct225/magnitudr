@@ -1,4 +1,5 @@
 stages:
+  # Keep existing stages but add new airflow-integrated stages
   batch_etl_ml:
     cmd: python3 scripts/run_spark_ml_processing.py
     deps:
@@ -10,3 +11,28 @@ stages:
     deps:
       - scripts/run_spark_evaluation.py
       - data/bigdata/earthquake_bigdata.csv
+
+  # NEW: Airflow-integrated stages
+  airflow_ingestion:
+    cmd: echo "Data ingested via Airflow"
+    deps:
+      - data/airflow_output/raw_earthquake_data.csv
+    outs:
+      - data/airflow_output/processed_earthquake_data.csv
+
+  airflow_clustering:
+    cmd: echo "Clustering via Airflow DBSCAN"
+    deps:
+      - data/airflow_output/processed_earthquake_data.csv
+    outs:
+      - data/airflow_output/clustering_summary.json
+      - data/plots/
+
+artifacts:
+  earthquake_model:
+    path: data/airflow_output/
+    desc: "Airflow-processed earthquake data and clustering results"
+  
+  legacy_bigdata:
+    path: data/bigdata/
+    desc: "Legacy big data processing results"

@@ -6,215 +6,196 @@ import os
 
 # Add custom operators to path
 sys.path.append('/opt/airflow/operators')
-from ml_classification_operator import EarthquakeMLClassificationOperator
 
 default_args = {
     'owner': 'magnitudr-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 10),
+    'start_date': datetime(2025, 6, 8),  # Sunday
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    'retry_delay': timedelta(minutes=10),
     'catchup': False
 }
 
 dag = DAG(
-    'earthquake_ml_training',
+    'earthquake_weekly_ml_training',
     default_args=default_args,
-    description='🤖 Machine Learning training for earthquake risk zone classification',
-    schedule_interval=None,  # Triggered manually or by master DAG
+    description='🤖 Weekly ML training with regularization - prevents overfitting',
+    schedule_interval='0 2 * * 0',  # Weekly Sunday 02:00 WIB (19:00 UTC Saturday)
     max_active_runs=1,
-    tags=['earthquake', 'ml', 'classification', 'training']
+    tags=['earthquake', 'ml', 'weekly', 'training']
 )
 
-# Task 1: ML Model Training with K-Fold CV
-task_ml_training = EarthquakeMLClassificationOperator(
-    task_id='train_risk_classification_model',
-    db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
-    model_output_path='/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model.pkl',
-    test_size=0.2,
-    cv_folds=5,
-    random_state=42,
-    dag=dag
-)
-
-def store_model_results_to_db(**context):
-    """Store ML model results and predictions to database"""
+def train_regularized_model(**context):
+    """Weekly ML training with regularization to prevent overfitting"""
     import pandas as pd
     import numpy as np
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split
+    from sklearn.preprocessing import StandardScaler, LabelEncoder
+    from sklearn.metrics import classification_report, confusion_matrix, f1_score, precision_score, recall_score, accuracy_score
+    from sqlalchemy import create_engine, text
     import joblib
     import json
-    from sqlalchemy import create_engine, text
     import logging
+    from pathlib import Path
+    
+    logging.info("🤖 Starting Weekly ML Training with Regularization...")
     
     try:
-        # Load model and results
-        model_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model.pkl'
-        metrics_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_metrics.json'
-        
-        if not os.path.exists(model_path):
-            raise FileNotFoundError("Model file not found")
-        
-        # Load metrics
-        with open(metrics_path, 'r') as f:
-            metrics = json.load(f)
-        
-        # Store model metadata to database
-        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
-        
-        # Create model metadata table if not exists
-        with engine.begin() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS ml_model_metadata (
-                    model_id SERIAL PRIMARY KEY,
-                    model_name VARCHAR(100),
-                    model_type VARCHAR(50),
-                    accuracy DECIMAL(6,4),
-                    precision_score DECIMAL(6,4),
-                    recall_score DECIMAL(6,4),
-                    f1_score DECIMAL(6,4),
-                    training_samples INTEGER,
-                    model_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            
-            # Insert model metadata
-            conn.execute(text("""
-                INSERT INTO ml_model_metadata 
-                (model_name, model_type, accuracy, precision_score, recall_score, f1_score, training_samples, model_path)
-                VALUES 
-                (:model_name, :model_type, :accuracy, :precision, :recall, :f1, :samples, :path)
-            """), {
-                'model_name': 'earthquake_risk_classifier',
-                'model_type': 'RandomForestClassifier',
-                'accuracy': metrics['accuracy'],
-                'precision': metrics['precision'],
-                'recall': metrics['recall'],
-                'f1': metrics['f1_score'],
-                'samples': int(metrics.get('training_data_size', 0)),
-                'path': model_path
-            })
-        
-        logging.info("✅ Model metadata stored to database")
-        logging.info(f"📊 Model Performance: Accuracy={metrics['accuracy']:.4f}, F1={metrics['f1_score']:.4f}")
-        
-        return metrics['accuracy']
-        
-    except Exception as e:
-        logging.error(f"❌ Failed to store model results: {e}")
-        raise
-
-task_store_results = PythonOperator(
-    task_id='store_model_results',
-    python_callable=store_model_results_to_db,
-    dag=dag
-)
-
-def generate_ml_predictions(**context):
-    """Generate predictions for all earthquake locations"""
-    import pandas as pd
-    import numpy as np
-    import joblib
-    from sqlalchemy import create_engine, text
-    import logging
-    
-    try:
-        # Load trained model and preprocessors
-        model = joblib.load('/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model.pkl')
-        scaler = joblib.load('/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_scaler.pkl')
-        label_encoder = joblib.load('/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_label_encoder.pkl')
-        
-        # Load data for prediction
+        # Load training data
         engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
         
         query = """
-        SELECT id, latitude, longitude, magnitude, depth, spatial_density, hazard_score
-        FROM earthquakes_processed
+        SELECT 
+            e.latitude, e.longitude, e.magnitude, e.depth,
+            e.spatial_density, e.hazard_score,
+            c.risk_zone, c.cluster_size, c.avg_magnitude
+        FROM earthquakes_processed e
+        INNER JOIN earthquake_clusters c ON e.id = c.id
+        WHERE c.risk_zone IS NOT NULL
         """
         
         with engine.connect() as conn:
             df = pd.read_sql(query, conn)
         
-        # Feature engineering (same as training)
-        df_features = df[['latitude', 'longitude', 'magnitude', 'depth', 'spatial_density', 'hazard_score']].copy()
+        logging.info(f"📊 Loaded {len(df)} training samples")
+        
+        # Feature engineering
+        feature_cols = ['latitude', 'longitude', 'magnitude', 'depth', 'spatial_density', 'hazard_score']
+        X = df[feature_cols].copy()
         
         # Add engineered features
-        df_features['distance_from_jakarta'] = np.sqrt(
-            (df_features['latitude'] + 6.2088) ** 2 + 
-            (df_features['longitude'] - 106.8456) ** 2
-        )
-        
-        df_features['distance_from_ring_of_fire'] = np.minimum(
-            np.abs(df_features['latitude'] + 5),
-            np.abs(df_features['longitude'] - 120)
-        )
-        
-        df_features['magnitude_depth_ratio'] = df_features['magnitude'] / (df_features['depth'] + 1)
-        df_features['energy_density'] = df_features['spatial_density'] * (df_features['magnitude'] ** 2)
-        df_features['shallow_earthquake'] = (df_features['depth'] < 70).astype(int)
-        df_features['high_magnitude'] = (df_features['magnitude'] > 5.0).astype(int)
-        df_features['lat_lon_interaction'] = df_features['latitude'] * df_features['longitude']
-        df_features['hazard_spatial_interaction'] = df_features['hazard_score'] * df_features['spatial_density']
+        X['distance_from_jakarta'] = np.sqrt((X['latitude'] + 6.2088) ** 2 + (X['longitude'] - 106.8456) ** 2)
+        X['magnitude_depth_ratio'] = X['magnitude'] / (X['depth'] + 1)
+        X['energy_density'] = X['spatial_density'] * (X['magnitude'] ** 2)
+        X['shallow_earthquake'] = (X['depth'] < 70).astype(int)
         
         # Handle missing values
-        df_features = df_features.fillna(df_features.median())
+        X = X.fillna(X.median())
+        
+        # Prepare labels
+        y = df['risk_zone'].copy()
+        label_encoder = LabelEncoder()
+        y_encoded = label_encoder.fit_transform(y)
+        
+        # Log class distribution
+        unique, counts = np.unique(y, return_counts=True)
+        class_dist = dict(zip(unique, counts))
+        logging.info(f"🏷️ Class distribution: {class_dist}")
+        
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+        )
         
         # Scale features
-        X_scaled = scaler.transform(df_features)
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
         
-        # Make predictions
-        predictions = model.predict(X_scaled)
-        prediction_probs = model.predict_proba(X_scaled)
+        # REGULARIZED Parameter Grid (Prevent Overfitting)
+        param_grid = {
+            'n_estimators': [50, 100],                    # Reduced complexity
+            'max_depth': [5, 10, 15],                     # Limited depth
+            'min_samples_split': [10, 20],                # Higher minimum
+            'min_samples_leaf': [5, 10],                  # Higher minimum  
+            'max_features': ['sqrt'],                     # Feature selection
+            'class_weight': ['balanced']                  # Handle imbalance
+        }
         
-        # Decode predictions
-        predicted_risk_zones = label_encoder.inverse_transform(predictions)
-        max_probabilities = np.max(prediction_probs, axis=1)
+        # Reduced CV for faster training
+        kfold = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         
-        # Create predictions dataframe
-        df_predictions = pd.DataFrame({
-            'earthquake_id': df['id'],
-            'predicted_risk_zone': predicted_risk_zones,
-            'prediction_confidence': max_probabilities,
-            'model_version': 'v1.0'
-        })
+        # Grid Search with regularization
+        rf = RandomForestClassifier(random_state=42)
+        grid_search = GridSearchCV(
+            estimator=rf,
+            param_grid=param_grid,
+            cv=kfold,
+            scoring='f1_weighted',
+            n_jobs=1,  # Single job for container
+            verbose=1
+        )
         
-        # Store predictions to database
-        with engine.begin() as conn:
-            # Create predictions table if not exists
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS earthquake_predictions (
-                    prediction_id SERIAL PRIMARY KEY,
-                    earthquake_id VARCHAR(100),
-                    predicted_risk_zone VARCHAR(20),
-                    prediction_confidence DECIMAL(6,4),
-                    model_version VARCHAR(20),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (earthquake_id) REFERENCES earthquakes_processed(id)
-                )
-            """))
-            
-            # Clear existing predictions
-            conn.execute(text("DELETE FROM earthquake_predictions"))
+        logging.info(f"🔍 Training {len(param_grid['n_estimators']) * len(param_grid['max_depth']) * len(param_grid['min_samples_split']) * len(param_grid['min_samples_leaf']) * len(param_grid['max_features']) * len(param_grid['class_weight'])} models with 3-fold CV...")
         
-        # Insert new predictions
-        df_predictions.to_sql('earthquake_predictions', engine, if_exists='append', index=False)
+        # Fit grid search
+        grid_search.fit(X_train_scaled, y_train)
         
-        logging.info(f"✅ Generated {len(df_predictions)} predictions")
-        logging.info(f"📊 Risk zone distribution: {pd.Series(predicted_risk_zones).value_counts().to_dict()}")
+        logging.info(f"🏆 Best parameters: {grid_search.best_params_}")
+        logging.info(f"🏆 Best CV score: {grid_search.best_score_:.4f}")
         
-        return len(df_predictions)
+        # Final model evaluation
+        best_model = grid_search.best_estimator_
+        y_pred_train = best_model.predict(X_train_scaled)
+        y_pred_test = best_model.predict(X_test_scaled)
+        
+        # Calculate metrics
+        train_accuracy = accuracy_score(y_train, y_pred_train)
+        test_accuracy = accuracy_score(y_test, y_pred_test)
+        test_precision = precision_score(y_test, y_pred_test, average='weighted')
+        test_recall = recall_score(y_test, y_pred_test, average='weighted')
+        test_f1 = f1_score(y_test, y_pred_test, average='weighted')
+        
+        # Overfitting check
+        overfitting_gap = train_accuracy - test_accuracy
+        
+        logging.info(f"📊 Regularized Model Performance:")
+        logging.info(f"   • Train Accuracy: {train_accuracy:.4f}")
+        logging.info(f"   • Test Accuracy: {test_accuracy:.4f}")
+        logging.info(f"   • Overfitting Gap: {overfitting_gap:.4f}")
+        logging.info(f"   • Precision: {test_precision:.4f}")
+        logging.info(f"   • Recall: {test_recall:.4f}")
+        logging.info(f"   • F1-Score: {test_f1:.4f}")
+        
+        # Expected range: 91-96% as requested
+        if 0.91 <= test_accuracy <= 0.96:
+            logging.info("✅ Model performance within expected range (91-96%)")
+        else:
+            logging.warning(f"⚠️ Model performance outside expected range: {test_accuracy:.4f}")
+        
+        # Save model and components
+        output_dir = Path("/opt/airflow/magnitudr/data/airflow_output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        joblib.dump(best_model, output_dir / "earthquake_risk_model_regularized.pkl")
+        joblib.dump(scaler, output_dir / "earthquake_risk_model_regularized_scaler.pkl")
+        joblib.dump(label_encoder, output_dir / "earthquake_risk_model_regularized_label_encoder.pkl")
+        
+        # Save metrics
+        metrics = {
+            'model_type': 'RandomForestClassifier_Regularized',
+            'train_accuracy': train_accuracy,
+            'test_accuracy': test_accuracy,
+            'overfitting_gap': overfitting_gap,
+            'precision': test_precision,
+            'recall': test_recall,
+            'f1_score': test_f1,
+            'best_params': grid_search.best_params_,
+            'class_distribution': class_dist,
+            'training_samples': len(X_train),
+            'test_samples': len(X_test),
+            'features_count': len(X.columns),
+            'training_timestamp': datetime.now().isoformat()
+        }
+        
+        with open(output_dir / "earthquake_risk_model_regularized_metrics.json", 'w') as f:
+            json.dump(metrics, f, indent=2)
+        
+        logging.info("✅ Regularized model training completed successfully")
+        return test_accuracy
         
     except Exception as e:
-        logging.error(f"❌ Failed to generate predictions: {e}")
+        logging.error(f"❌ ML training failed: {e}")
         raise
 
-task_generate_predictions = PythonOperator(
-    task_id='generate_ml_predictions',
-    python_callable=generate_ml_predictions,
+task_regularized_ml = PythonOperator(
+    task_id='train_regularized_model',
+    python_callable=train_regularized_model,
     dag=dag
 )
 
-# Dependencies
-task_ml_training >> task_store_results >> task_generate_predictions
+# Single task for weekly execution
+task_regularized_ml

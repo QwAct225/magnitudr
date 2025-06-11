@@ -1,151 +1,252 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-import logging
-import psycopg2
-import json
-from pathlib import Path
+import sys
 import os
+import logging
 
-# DAG configuration
+# Add operators to path
+sys.path.append('/opt/airflow/operators')
+
 default_args = {
     'owner': 'magnitudr-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 11, 20, 20),
+    'start_date': datetime(2025, 6, 11, 8, 5),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=2),
+    'retry_delay': timedelta(minutes=5),
     'catchup': False
 }
 
-# Master DAG for orchestrating the complete pipeline
 dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
-    description='🌍 Master pipeline for earthquake analysis and hazard detection',
-    schedule_interval='*/30 * * * *',  # Every 30 minutes for stable testing
+    description='Master earthquake analysis pipeline - production ready',
+    schedule_interval='5 8 * * *',
     max_active_runs=1,
-    tags=['earthquake', 'master', 'pipeline', 'etl']
+    tags=['earthquake', 'master', 'production']
 )
 
-def check_system_health(**context):
-    """Check system prerequisites and health"""
+def run_usgs_ingestion(**context):
+    """Step 1: USGS Data Ingestion"""
+    logging.info("Starting USGS data ingestion...")
     
-    # Database connectivity check
     try:
-        conn = psycopg2.connect(
-            host="postgres",
-            port="5432", 
-            database="magnitudr",
-            user="postgres",
-            password="earthquake123"
+        from usgs_operator import USGSDataOperator
+        
+        usgs_operator = USGSDataOperator(
+            task_id='usgs_ingestion',
+            output_path='/opt/airflow/magnitudr/data/airflow_output/raw_earthquake_data.csv',
+            start_year=2014,
+            min_magnitude=1.0,
+            target_size_mb=64.0,
+            strict_validation=False
         )
         
-        # Test basic query
+        result = usgs_operator.execute(context)
+        logging.info(f"✅ USGS ingestion completed: {result} records")
+        return result
+        
+    except Exception as e:
+        logging.error(f"❌ USGS ingestion failed: {e}")
+        raise
+
+def run_spatial_processing(**context):
+    """Step 2: Spatial Processing and Feature Engineering"""
+    logging.info("🔄 Starting spatial processing...")
+    
+    try:
+        from spatial_operator import SpatialDensityOperator
+        
+        spatial_operator = SpatialDensityOperator(
+            task_id='spatial_processing',
+            input_path='/opt/airflow/magnitudr/data/airflow_output/raw_earthquake_data.csv',
+            output_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
+            grid_size=0.1
+        )
+        
+        result = spatial_operator.execute(context)
+        logging.info(f"✅ Spatial processing completed: {result} records")
+        return result
+        
+    except Exception as e:
+        logging.error(f"❌ Spatial processing failed: {e}")
+        raise
+
+def load_to_database(**context):
+    """Step 3: Load processed data to PostgreSQL"""
+    logging.info("📊 Loading data to PostgreSQL...")
+    
+    try:
+        import pandas as pd
+        from sqlalchemy import create_engine, text
+        
+        df = pd.read_csv('/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv')
+        logging.info(f"📊 Read {len(df)} records from processed file")
+        
+        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
+        
+        if 'time' in df.columns:
+            df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
+        
+        db_columns = [
+            'id', 'magnitude', 'latitude', 'longitude', 'depth', 'time',
+            'place', 'spatial_density', 'hazard_score', 'region',
+            'magnitude_category', 'depth_category'
+        ]
+        
+        available_cols = [col for col in db_columns if col in df.columns]
+        df_clean = df[available_cols].copy()
+        
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM earthquake_clusters"))
+            conn.execute(text("DELETE FROM hazard_zones"))
+            conn.execute(text("DELETE FROM earthquakes_processed"))
+            logging.info("✅ Cleared existing data")
+        
+        df_clean.to_sql(
+            'earthquakes_processed',
+            engine,
+            if_exists='append',
+            index=False,
+            method='multi'
+        )
+        
+        logging.info(f"✅ Loaded {len(df_clean)} records to database")
+        return len(df_clean)
+        
+    except Exception as e:
+        logging.error(f"❌ Database loading failed: {e}")
+        raise
+
+def run_dbscan_clustering(**context):
+    """Step 4: DBSCAN Clustering Analysis"""
+    logging.info("🔬 Starting DBSCAN clustering...")
+    
+    try:
+        from dbscan_operator import DBSCANClusterOperator
+        
+        dbscan_operator = DBSCANClusterOperator(
+            task_id='dbscan_clustering',
+            input_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
+            db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
+            eps=0.1,
+            min_samples=5
+        )
+        
+        result = dbscan_operator.execute(context)
+        logging.info(f"✅ DBSCAN clustering completed: {result} clusters")
+        return result
+        
+    except Exception as e:
+        logging.error(f"❌ DBSCAN clustering failed: {e}")
+        raise
+
+def generate_master_report(**context):
+    """Step 5: Generate master pipeline report"""
+    logging.info("📋 Generating master pipeline report...")
+    
+    try:
+        import psycopg2
+        import json
+        from pathlib import Path
+        
+        conn = psycopg2.connect(
+            host="postgres", port="5432", database="magnitudr",
+            user="postgres", password="earthquake123"
+        )
         cursor = conn.cursor()
+        
         cursor.execute("SELECT COUNT(*) FROM earthquakes_processed")
-        existing_count = cursor.fetchone()[0]
+        total_earthquakes = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(DISTINCT cluster_id) FROM earthquake_clusters WHERE cluster_id IS NOT NULL")
+        total_clusters = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM hazard_zones WHERE risk_level IN ('High', 'Extreme')")
+        high_risk_zones = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT risk_zone, COUNT(*) as count 
+            FROM earthquake_clusters 
+            GROUP BY risk_zone 
+            ORDER BY count DESC
+        """)
+        risk_distribution = dict(cursor.fetchall())
         
         cursor.close()
         conn.close()
         
-        logging.info(f"✅ Database OK - {existing_count} existing records")
+        report = {
+            'pipeline_name': 'Magnitudr Master Production Pipeline',
+            'execution_timestamp': datetime.now().isoformat(),
+            'status': 'SUCCESS',
+            'schedule': 'Daily at 14:43 WIB',
+            'data_statistics': {
+                'total_earthquakes': total_earthquakes,
+                'total_clusters': total_clusters,
+                'high_risk_zones': high_risk_zones,
+                'risk_distribution': risk_distribution,
+                'data_coverage': '2014-2025 (11 years)'
+            },
+            'system_endpoints': {
+                'api_docs': 'http://localhost:8000/docs',
+                'api_health': 'http://localhost:8000/health',
+                'dashboard': 'http://localhost:8501',
+                'airflow': 'http://localhost:8080'
+            },
+            'production_ready': True
+        }
+        
+        report_path = Path("/opt/airflow/magnitudr/data/airflow_output/master_pipeline_report.json")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        logging.info(f"🎉 MASTER PIPELINE PRODUCTION READY!")
+        logging.info(f"📊 Earthquakes: {total_earthquakes:,}")
+        logging.info(f"🔬 Clusters: {total_clusters}")
+        logging.info(f"🚨 High-risk zones: {high_risk_zones}")
+        logging.info(f"🎯 Dashboard: http://localhost:8501")
+        
+        return str(report_path)
+        
     except Exception as e:
-        logging.error(f"❌ Database connection failed: {e}")
+        logging.error(f"❌ Master report failed: {e}")
         raise
-    
-    # Check and create data directories
-    data_paths = [
-        "/opt/airflow/magnitudr/data",
-        "/opt/airflow/magnitudr/data/airflow_output"
-    ]
-    
-    for path in data_paths:
-        os.makedirs(path, exist_ok=True)
-        logging.info(f"📁 Directory ready: {path}")
-    
-    logging.info("🎉 System health check passed!")
-    return True
-
-def generate_pipeline_report(**context):
-    """Generate comprehensive pipeline execution report"""
-    
-    execution_date = context['execution_date']
-    dag_run = context['dag_run']
-    
-    # Collect execution metadata
-    report = {
-        'pipeline_name': 'Earthquake Master Pipeline',
-        'execution_date': execution_date.isoformat(),
-        'dag_run_id': dag_run.dag_id,
-        'status': 'SUCCESS',
-        'stages_completed': [
-            'System Health Check',
-            'Data Ingestion (USGS API)', 
-            'Spatial Processing (ETL)',
-            'DBSCAN Clustering'
-        ],
-        'api_endpoints': {
-            'docs': 'http://localhost:8000/docs',
-            'earthquakes': 'http://localhost:8000/earthquakes',
-            'clusters': 'http://localhost:8000/clusters',
-            'stats': 'http://localhost:8000/stats'
-        },
-        'dashboard_url': 'http://localhost:8501',
-        'timestamp': datetime.now().isoformat()
-    }
-    
-    # Save report
-    report_path = Path("/opt/airflow/magnitudr/data/airflow_output/master_pipeline_report.json")
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(report_path, 'w') as f:
-        json.dump(report, f, indent=2)
-    
-    logging.info(f"✅ Pipeline report saved: {report_path}")
-    logging.info(f" Access dashboard: http://localhost:8501")
-    logging.info(f" API docs: http://localhost:8000/docs")
-    
-    return str(report_path)
 
 # Define tasks
-task_health_check = PythonOperator(
-    task_id='check_system_health',
-    python_callable=check_system_health,
+task_ingestion = PythonOperator(
+    task_id='usgs_data_ingestion',
+    python_callable=run_usgs_ingestion,
     dag=dag
 )
 
-task_trigger_ingestion = TriggerDagRunOperator(
-    task_id='trigger_data_ingestion',
-    trigger_dag_id='earthquake_data_ingestion',
-    wait_for_completion=True,
-    reset_dag_run=True,
+task_processing = PythonOperator(
+    task_id='spatial_processing',
+    python_callable=run_spatial_processing,
     dag=dag
 )
 
-task_trigger_processing = TriggerDagRunOperator(
-    task_id='trigger_spatial_processing', 
-    trigger_dag_id='earthquake_spatial_processing',
-    wait_for_completion=True,
-    reset_dag_run=True,
+task_database = PythonOperator(
+    task_id='load_to_database',
+    python_callable=load_to_database,
     dag=dag
 )
 
-task_trigger_clustering = TriggerDagRunOperator(
-    task_id='trigger_dbscan_clustering',
-    trigger_dag_id='earthquake_dbscan_clustering', 
-    wait_for_completion=True,
-    reset_dag_run=True,
+task_clustering = PythonOperator(
+    task_id='dbscan_clustering',
+    python_callable=run_dbscan_clustering,
     dag=dag
 )
 
-task_generate_report = PythonOperator(
-    task_id='generate_pipeline_report',
-    python_callable=generate_pipeline_report,
+task_report = PythonOperator(
+    task_id='generate_master_report',
+    python_callable=generate_master_report,
     dag=dag
 )
 
-# Define dependencies
-task_health_check >> task_trigger_ingestion >> task_trigger_processing >> task_trigger_clustering >> task_generate_report
+# Production pipeline flow
+task_ingestion >> task_processing >> task_database >> task_clustering >> task_report

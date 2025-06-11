@@ -187,24 +187,42 @@ if api_healthy:
     
     if earthquake_data and stats_data:
         df_earthquakes = pd.DataFrame(earthquake_data)
+        
+        # Add missing columns if not present
+        if 'risk_zone' not in df_earthquakes.columns:
+            # Try to get risk zone from clusters
+            if cluster_data:
+                cluster_df = pd.DataFrame(cluster_data)
+                risk_mapping = cluster_df.set_index('id')['risk_zone'].to_dict()
+                df_earthquakes['risk_zone'] = df_earthquakes['id'].map(risk_mapping).fillna('Unknown')
+            else:
+                # Generate risk zone based on magnitude and depth
+                df_earthquakes['risk_zone'] = df_earthquakes.apply(
+                    lambda row: 'Extreme' if row['magnitude'] >= 7.0 or (row['magnitude'] >= 6.0 and row['depth'] < 50)
+                    else 'High' if row['magnitude'] >= 5.5 or (row['magnitude'] >= 5.0 and row['depth'] < 70)
+                    else 'Moderate' if row['magnitude'] >= 4.0
+                    else 'Low', axis=1
+                )
+        
         st.sidebar.metric("📊 Live Data", "Active")
         st.sidebar.metric("Total Earthquakes", f"{stats_data['total_earthquakes']:,}")
         st.sidebar.metric("Clusters", stats_data['total_clusters'])
         st.sidebar.metric("High-Risk Zones", stats_data['high_risk_zones'])
     else:
-        # Fallback to demo data
-        df_earthquakes = generate_demo_data()
-        st.sidebar.metric("📊 Demo Data", "Active")
-        st.sidebar.metric("Total Earthquakes", f"{len(df_earthquakes):,}")
-        st.sidebar.metric("Clusters", "12")
-        st.sidebar.metric("High-Risk Zones", "4")
+        # No fallback - show error message
+        st.error("❌ Unable to load earthquake data from API")
+        st.info("Please check if the pipeline has completed successfully")
+        st.stop()
 else:
-    # Demo mode
-    df_earthquakes = generate_demo_data()
-    st.sidebar.metric("📊 Demo Mode", "Active")
-    st.sidebar.metric("Total Earthquakes", f"{len(df_earthquakes):,}")
-    st.sidebar.metric("Clusters", "12")
-    st.sidebar.metric("High-Risk Zones", "4")
+    # No fallback - show connection error
+    st.error("❌ API connection failed")
+    st.info("Please ensure all services are running:")
+    st.code("""
+    docker-compose up -d
+    # Wait for services to start
+    # Check: http://localhost:8000/health
+    """)
+    st.stop()
 
 # PAGE 1: HAZARD ZONE MAP
 if page == "🗺️ Hazard Zone Map":
@@ -215,7 +233,7 @@ if page == "🗺️ Hazard Zone Map":
     </div>
     """, unsafe_allow_html=True)
     
-    # Filters
+    # Filters with error handling
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -228,25 +246,38 @@ if page == "🗺️ Hazard Zone Map":
         )
     
     with col2:
+        # Safe risk zone filter
+        available_risk_zones = df_earthquakes['risk_zone'].unique().tolist() if 'risk_zone' in df_earthquakes.columns else ['Unknown']
         risk_filter = st.multiselect(
             "🚨 Risk Zones",
-            options=['Low', 'Moderate', 'High', 'Extreme'],
-            default=['Low', 'Moderate', 'High', 'Extreme']
+            options=available_risk_zones,
+            default=available_risk_zones
         )
     
     with col3:
+        # Safe region filter
+        available_regions = df_earthquakes['region'].unique().tolist() if 'region' in df_earthquakes.columns else ['Unknown']
         region_filter = st.multiselect(
             "🗺️ Regions",
-            options=df_earthquakes['region'].unique(),
-            default=df_earthquakes['region'].unique()
+            options=available_regions,
+            default=available_regions
         )
     
-    # Filter data
-    filtered_df = df_earthquakes[
-        (df_earthquakes['magnitude'] >= magnitude_filter) &
-        (df_earthquakes['risk_zone'].isin(risk_filter)) &
-        (df_earthquakes['region'].isin(region_filter))
-    ]
+    # Safe filtering
+    try:
+        filtered_df = df_earthquakes[
+            (df_earthquakes['magnitude'] >= magnitude_filter)
+        ]
+        
+        if 'risk_zone' in df_earthquakes.columns and risk_filter:
+            filtered_df = filtered_df[filtered_df['risk_zone'].isin(risk_filter)]
+        
+        if 'region' in df_earthquakes.columns and region_filter:
+            filtered_df = filtered_df[filtered_df['region'].isin(region_filter)]
+            
+    except Exception as e:
+        st.error(f"Filtering error: {e}")
+        filtered_df = df_earthquakes
     
     # Main map and metrics
     col1, col2 = st.columns([3, 1])

@@ -23,7 +23,7 @@ dag = DAG(
     'earthquake_data_ingestion',
     default_args=default_args,
     description='USGS earthquake data ingestion 2016-2025',
-    schedule_interval=None,  # Triggered by master DAG
+    schedule_interval=None,
     max_active_runs=1,
     tags=['earthquake', 'ingestion', 'usgs', '2016-2025']
 )

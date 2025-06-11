@@ -4,7 +4,7 @@ numpy==1.26.4
 requests==2.32.3
 psycopg2-binary==2.9.10
 sqlalchemy==2.0.40
-scikit-learn==1.4.2
+scikit-learn
 python-dotenv==1.1.0
 dvc[gs]==3.50.0
 geopandas==0.14.3

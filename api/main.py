@@ -89,6 +89,26 @@ class SystemStats(BaseModel):
     last_update: datetime
     data_quality_score: float
 
+def safe_float(value):
+    """Safely convert any numeric type to float"""
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
+    try:
+        return float(value)
+    except:
+        return 0.0
+
+def safe_int(value):
+    """Safely convert any numeric type to int"""
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except:
+        return 0
+
 # Database dependency with fallback
 def get_db_connection():
     if engine is None:
@@ -115,9 +135,35 @@ async def root():
             "earthquakes": "/earthquakes",
             "clusters": "/clusters", 
             "hazard-zones": "/hazard-zones",
-            "statistics": "/stats"
+            "statistics": "/stats",
+            "health": "/health"
         }
     }
+
+@app.get("/health", summary="System Health Check")
+async def health_check():
+    """Detailed health check for monitoring"""
+    try:
+        if engine is None:
+            return {"status": "unhealthy", "database": "disconnected"}
+            
+        with get_db_connection() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM earthquakes_processed")).fetchone()
+            count = result[0] if result else 0
+            
+        return {
+            "status": "healthy",
+            "database": "connected", 
+            "earthquake_records": safe_int(count),
+            "api_version": "1.0.0",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/earthquakes", response_model=List[EarthquakeData], summary="Get Earthquake Data")
 async def get_earthquakes(
@@ -171,14 +217,14 @@ async def get_earthquakes(
         for row in data:
             earthquakes.append(EarthquakeData(
                 id=str(row[0]),
-                magnitude=float(row[1]) if row[1] else 0.0,
-                latitude=float(row[2]) if row[2] else 0.0,
-                longitude=float(row[3]) if row[3] else 0.0,
-                depth=float(row[4]) if row[4] else 0.0,
+                magnitude=safe_float(row[1]),
+                latitude=safe_float(row[2]),
+                longitude=safe_float(row[3]),
+                depth=safe_float(row[4]),
                 time=row[5],
                 place=str(row[6]) if row[6] else "",
-                spatial_density=float(row[7]) if row[7] else 0.0,
-                hazard_score=float(row[8]) if row[8] else 0.0,
+                spatial_density=safe_float(row[7]),
+                hazard_score=safe_float(row[8]),
                 region=str(row[9]) if row[9] else "Unknown",
                 magnitude_category=str(row[10]) if row[10] else "Unknown",
                 depth_category=str(row[11]) if row[11] else "Unknown"
@@ -231,13 +277,13 @@ async def get_clusters(
         for row in data:
             clusters.append(ClusterData(
                 id=str(row[0]),
-                cluster_id=int(row[1]) if row[1] else 0,
+                cluster_id=safe_int(row[1]),
                 cluster_label=str(row[2]),
                 risk_zone=str(row[3]),
-                centroid_lat=float(row[4]) if row[4] else 0.0,
-                centroid_lon=float(row[5]) if row[5] else 0.0,
-                cluster_size=int(row[6]) if row[6] else 0,
-                avg_magnitude=float(row[7]) if row[7] else 0.0
+                centroid_lat=safe_float(row[4]),
+                centroid_lon=safe_float(row[5]),
+                cluster_size=safe_int(row[6]),
+                avg_magnitude=safe_float(row[7])
             ))
         
         logger.info(f"✅ Retrieved {len(clusters)} cluster records")
@@ -281,12 +327,12 @@ async def get_hazard_zones(
         hazard_zones = []
         for row in data:
             hazard_zones.append(HazardZone(
-                zone_id=int(row[0]) if row[0] else 0,
+                zone_id=safe_int(row[0]),
                 risk_level=str(row[1]),
-                avg_magnitude=float(row[2]) if row[2] else 0.0,
-                event_count=int(row[3]) if row[3] else 0,
-                center_lat=float(row[4]) if row[4] else 0.0,
-                center_lon=float(row[5]) if row[5] else 0.0,
+                avg_magnitude=safe_float(row[2]),
+                event_count=safe_int(row[3]),
+                center_lat=safe_float(row[4]),
+                center_lon=safe_float(row[5]),
                 boundary_coordinates=str(row[6]) if row[6] else "{}"
             ))
         
@@ -299,7 +345,7 @@ async def get_hazard_zones(
 
 @app.get("/stats", response_model=SystemStats, summary="Get System Statistics")
 async def get_system_stats():
-    """Get comprehensive system statistics"""
+    """Get comprehensive system statistics with safe decimal handling"""
     try:
         with get_db_connection() as conn:
             # Get earthquake statistics with safe handling
@@ -325,14 +371,14 @@ async def get_system_stats():
                 WHERE risk_level IN ('High', 'Extreme')
             """)).fetchone()
             
-            # Safe value extraction
-            total_earthquakes = earthquake_result[0] if earthquake_result and earthquake_result[0] else 0
-            avg_hazard = earthquake_result[1] if earthquake_result and earthquake_result[1] else 0
-            total_clusters = cluster_result[0] if cluster_result and cluster_result[0] else 0
-            high_risk_zones = risk_result[0] if risk_result and risk_result[0] else 0
+            # Safe value extraction with proper type handling
+            total_earthquakes = safe_int(earthquake_result[0]) if earthquake_result and earthquake_result[0] else 0
+            avg_hazard = safe_float(earthquake_result[1]) if earthquake_result and earthquake_result[1] else 0.0
+            total_clusters = safe_int(cluster_result[0]) if cluster_result and cluster_result[0] else 0
+            high_risk_zones = safe_int(risk_result[0]) if risk_result and risk_result[0] else 0
             
-            # Calculate data quality score
-            data_quality = min(float(avg_hazard) / 10.0, 1.0) if avg_hazard else 0.0
+            # Calculate data quality score (safe division)
+            data_quality = min(avg_hazard / 10.0, 1.0) if avg_hazard > 0 else 0.0
         
         stats = SystemStats(
             total_earthquakes=total_earthquakes,
@@ -347,31 +393,39 @@ async def get_system_stats():
         
     except Exception as e:
         logger.error(f"❌ Failed to retrieve statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Statistics query failed: {str(e)}")
 
-@app.get("/health", summary="Database Health Check")
-async def health_check():
-    """Simple health check for monitoring"""
+@app.get("/regions", summary="Get Available Regions")
+async def get_regions():
+    """Get list of available Indonesian regions"""
     try:
-        if engine is None:
-            return {"status": "unhealthy", "database": "disconnected"}
-            
         with get_db_connection() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM earthquakes_processed")).fetchone()
-            count = result[0] if result else 0
+            result = conn.execute(text("""
+                SELECT 
+                    region,
+                    COUNT(*) as event_count,
+                    AVG(magnitude) as avg_magnitude,
+                    MAX(magnitude) as max_magnitude
+                FROM earthquakes_processed 
+                GROUP BY region
+                ORDER BY event_count DESC
+            """))
             
-        return {
-            "status": "healthy",
-            "database": "connected", 
-            "earthquake_records": count,
-            "timestamp": datetime.now().isoformat()
-        }
+            regions = []
+            for row in result:
+                regions.append({
+                    "region": str(row[0]) if row[0] else "Unknown",
+                    "event_count": safe_int(row[1]),
+                    "avg_magnitude": round(safe_float(row[2]), 2),
+                    "max_magnitude": safe_float(row[3])
+                })
+        
+        logger.info(f"✅ Retrieved {len(regions)} regions")
+        return {"regions": regions}
+        
     except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+        logger.error(f"❌ Failed to retrieve regions: {e}")
+        raise HTTPException(status_code=500, detail=f"Regions query failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -23,7 +23,7 @@ default_args = {
 dag = DAG(
     'earthquake_dbscan_clustering',
     default_args=default_args,
-    description='🔬 DBSCAN clustering and hazard zone analysis',
+    description='DBSCAN clustering and hazard zone analysis',
     schedule_interval=None,  # Triggered by master DAG
     max_active_runs=1,
     tags=['earthquake', 'clustering', 'dbscan']
@@ -64,7 +64,7 @@ def generate_clustering_summary(**context):
                 GROUP BY risk_zone
                 ORDER BY total_events DESC
             """))
-            
+
             risk_zones = []
             for row in result:
                 risk_zone_data = {
@@ -162,7 +162,7 @@ def trigger_dvc_versioning(**context):
                 check=True,
                 timeout=120
             )
-            
+
             logging.info("✅ DVC versioning completed")
         else:
             logging.warning("⚠️ DVC not properly configured - skipping versioning")

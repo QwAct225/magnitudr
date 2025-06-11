@@ -5,10 +5,13 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import logging
 import os
+import great_expectations as gx
+from great_expectations.core import ExpectationSuite, ExpectationConfiguration
 
 class SpatialDensityOperator(BaseOperator):
     """
     Custom operator for spatial density calculation and feature engineering
+    Enhanced with Great Expectations validation
     """
     
     @apply_defaults
@@ -17,12 +20,14 @@ class SpatialDensityOperator(BaseOperator):
         input_path: str,
         output_path: str,
         grid_size: float = 0.1,
+        enable_validation: bool = True,
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.input_path = input_path
         self.output_path = output_path
         self.grid_size = grid_size
+        self.enable_validation = enable_validation
     
     def execute(self, context):
         logging.info("📊 Starting spatial density calculation...")
@@ -71,6 +76,10 @@ class SpatialDensityOperator(BaseOperator):
             # Hazard score calculation
             df['hazard_score'] = self._calculate_hazard_score(df)
             
+            # Apply Great Expectations validation AFTER transformation
+            if self.enable_validation:
+                self._apply_great_expectations_validation(df)
+            
             # Save processed data
             output_dir = os.path.dirname(self.output_path)
             os.makedirs(output_dir, exist_ok=True)
@@ -84,6 +93,151 @@ class SpatialDensityOperator(BaseOperator):
         except Exception as e:
             logging.error(f"❌ Spatial processing failed: {e}")
             raise
+    
+    def _apply_great_expectations_validation(self, df):
+        """Apply Great Expectations validation to processed data"""
+        try:
+            logging.info("🔍 Running Great Expectations validation on processed data...")
+            
+            # Create expectation suite for processed data
+            suite = ExpectationSuite(expectation_suite_name="processed_data_validation")
+            
+            # Add comprehensive expectations
+            expectations = [
+                # Data completeness
+                ExpectationConfiguration(
+                    expectation_type="expect_table_row_count_to_be_between",
+                    kwargs={"min_value": 1000, "max_value": 200000}
+                ),
+                
+                # Critical columns not null
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_not_be_null",
+                    kwargs={"column": "id"}
+                ),
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_not_be_null",
+                    kwargs={"column": "magnitude"}
+                ),
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_not_be_null",
+                    kwargs={"column": "latitude"}
+                ),
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_not_be_null",
+                    kwargs={"column": "longitude"}
+                ),
+                
+                # Magnitude validation
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_between",
+                    kwargs={"column": "magnitude", "min_value": 0.5, "max_value": 10.0}
+                ),
+                
+                # Geographic bounds for Indonesia
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_between",
+                    kwargs={"column": "latitude", "min_value": -12.0, "max_value": 8.0}
+                ),
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_between",
+                    kwargs={"column": "longitude", "min_value": 94.0, "max_value": 142.0}
+                ),
+                
+                # Depth validation
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_between",
+                    kwargs={"column": "depth", "min_value": 0.0, "max_value": 800.0}
+                ),
+                
+                # Hazard score validation
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_between",
+                    kwargs={"column": "hazard_score", "min_value": 0.0, "max_value": 10.0}
+                ),
+                
+                # Spatial density validation
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_between",
+                    kwargs={"column": "spatial_density", "min_value": 0.0, "max_value": 100.0}
+                ),
+                
+                # Region validation
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_in_set",
+                    kwargs={"column": "region", "value_set": ['Java', 'Sumatra', 'Sulawesi', 'Eastern_Indonesia', 'Kalimantan', 'Other']}
+                ),
+                
+                # Category validation
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_in_set",
+                    kwargs={"column": "magnitude_category", "value_set": ['Very Minor', 'Minor', 'Light', 'Moderate', 'Strong', 'Major']}
+                ),
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_be_in_set",
+                    kwargs={"column": "depth_category", "value_set": ['Very Shallow', 'Shallow', 'Intermediate', 'Deep']}
+                ),
+                
+                # Data quality checks
+                ExpectationConfiguration(
+                    expectation_type="expect_column_values_to_not_be_null",
+                    kwargs={"column": "time", "mostly": 0.95}  # Allow 5% null for time parsing issues
+                )
+            ]
+            
+            for expectation in expectations:
+                suite.add_expectation(expectation)
+            
+            # Create context and validate
+            context = gx.get_context()
+            batch = context.get_validator(
+                batch_request=context.get_batch_request_from_pandas_dataframe(df),
+                expectation_suite=suite
+            )
+            
+            # Run validation
+            results = batch.validate()
+            
+            # Process results
+            if results.success:
+                logging.info("✅ Great Expectations validation: ALL PASSED")
+                logging.info(f"📊 Validated {len(results.results)} expectations")
+            else:
+                failed_expectations = []
+                for result in results.results:
+                    if not result.success:
+                        failed_expectations.append({
+                            'expectation': result.expectation_config.expectation_type,
+                            'column': result.expectation_config.kwargs.get('column', 'N/A'),
+                            'observed_value': result.result.get('observed_value', 'N/A')
+                        })
+                
+                logging.warning(f"⚠️ Great Expectations validation: {len(failed_expectations)} failed")
+                for failed in failed_expectations:
+                    logging.warning(f"   - {failed['expectation']} on {failed['column']}: {failed['observed_value']}")
+            
+            # Generate validation report
+            validation_report = {
+                'validation_timestamp': pd.Timestamp.now().isoformat(),
+                'total_expectations': len(results.results),
+                'successful_expectations': sum(1 for r in results.results if r.success),
+                'failed_expectations': len(failed_expectations),
+                'success_rate': results.success,
+                'data_quality_score': sum(1 for r in results.results if r.success) / len(results.results)
+            }
+            
+            # Save validation report
+            report_path = self.output_path.replace('.csv', '_validation_report.json')
+            import json
+            with open(report_path, 'w') as f:
+                json.dump(validation_report, f, indent=2)
+            
+            logging.info(f"📋 Validation report saved: {report_path}")
+            logging.info(f"📈 Data quality score: {validation_report['data_quality_score']:.2%}")
+            
+        except Exception as e:
+            logging.warning(f"⚠️ Great Expectations validation error: {e}")
+            # Don't fail the whole pipeline for validation issues
     
     def _classify_region(self, row):
         """Classify earthquake by Indonesian region"""

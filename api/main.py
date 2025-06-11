@@ -7,6 +7,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 import logging
+from decimal import Decimal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +63,7 @@ class EarthquakeData(BaseModel):
     region: Optional[str] = None
     magnitude_category: Optional[str] = None
     depth_category: Optional[str] = None
+    risk_zone: Optional[str] = None  # Added risk_zone field
 
 class ClusterData(BaseModel):
     id: str
@@ -182,8 +184,10 @@ async def get_earthquakes(
             COALESCE(e.hazard_score, 0) as hazard_score, 
             COALESCE(e.region, 'Unknown') as region,
             COALESCE(e.magnitude_category, 'Unknown') as magnitude_category, 
-            COALESCE(e.depth_category, 'Unknown') as depth_category
+            COALESCE(e.depth_category, 'Unknown') as depth_category,
+            COALESCE(c.risk_zone, 'Unknown') as risk_zone
         FROM earthquakes_processed e
+        LEFT JOIN earthquake_clusters c ON e.id = c.id
         WHERE 1=1
         """
         
@@ -227,7 +231,8 @@ async def get_earthquakes(
                 hazard_score=safe_float(row[8]),
                 region=str(row[9]) if row[9] else "Unknown",
                 magnitude_category=str(row[10]) if row[10] else "Unknown",
-                depth_category=str(row[11]) if row[11] else "Unknown"
+                depth_category=str(row[11]) if row[11] else "Unknown",
+                risk_zone=str(row[12]) if row[12] else "Unknown"  # Added risk_zone
             ))
         
         logger.info(f"✅ Retrieved {len(earthquakes)} earthquake records")

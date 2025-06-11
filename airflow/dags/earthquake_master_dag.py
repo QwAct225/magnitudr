@@ -11,7 +11,7 @@ sys.path.append('/opt/airflow/operators')
 default_args = {
     'owner': 'magnitudr-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 11, 8, 5),
+    'start_date': datetime(2025, 6, 10),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -22,15 +22,15 @@ default_args = {
 dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
-    description='Master earthquake analysis pipeline - production ready',
-    schedule_interval='5 8 * * *',
+    description='🌍 Master earthquake analysis pipeline - production ready',
+    schedule_interval='0 19 * * *', # Daily at 02:00 WIB
     max_active_runs=1,
     tags=['earthquake', 'master', 'production']
 )
 
 def run_usgs_ingestion(**context):
     """Step 1: USGS Data Ingestion"""
-    logging.info("Starting USGS data ingestion...")
+    logging.info("🌍 Starting USGS data ingestion...")
     
     try:
         from usgs_operator import USGSDataOperator

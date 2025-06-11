@@ -3,6 +3,10 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 import logging
+import psycopg2
+import json
+from pathlib import Path
+import os
 
 # DAG configuration
 default_args = {
@@ -12,7 +16,7 @@ default_args = {
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=2),  # Faster retry for testing
+    'retry_delay': timedelta(minutes=2),
     'catchup': False
 }
 
@@ -21,20 +25,15 @@ dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
     description='🌍 Master pipeline for earthquake analysis and hazard detection',
-    schedule_interval='*/10 * * * *',  # Every 10 minutes for testing
-    # schedule_interval='@daily',     # Use this for production
+    schedule_interval='*/30 * * * *',  # Every 30 minutes for stable testing
     max_active_runs=1,
-    tags=['earthquake', 'master', 'pipeline', 'testing']
+    tags=['earthquake', 'master', 'pipeline', 'etl']
 )
 
 def check_system_health(**context):
     """Check system prerequisites and health"""
-    logging.info("🔍 Checking system health...")
     
     # Database connectivity check
-    import os
-    import psycopg2
-    
     try:
         conn = psycopg2.connect(
             host="postgres",
@@ -43,13 +42,21 @@ def check_system_health(**context):
             user="postgres",
             password="earthquake123"
         )
+        
+        # Test basic query
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM earthquakes_processed")
+        existing_count = cursor.fetchone()[0]
+        
+        cursor.close()
         conn.close()
-        logging.info("✅ Database connection: OK")
+        
+        logging.info(f"✅ Database OK - {existing_count} existing records")
     except Exception as e:
         logging.error(f"❌ Database connection failed: {e}")
         raise
     
-    # Check data directories
+    # Check and create data directories
     data_paths = [
         "/opt/airflow/magnitudr/data",
         "/opt/airflow/magnitudr/data/airflow_output"
@@ -64,40 +71,29 @@ def check_system_health(**context):
 
 def generate_pipeline_report(**context):
     """Generate comprehensive pipeline execution report"""
-    logging.info("📋 Generating pipeline execution report...")
     
-    import json
-    from pathlib import Path
-    
-    # Collect execution metadata
     execution_date = context['execution_date']
     dag_run = context['dag_run']
     
+    # Collect execution metadata
     report = {
         'pipeline_name': 'Earthquake Master Pipeline',
         'execution_date': execution_date.isoformat(),
         'dag_run_id': dag_run.dag_id,
         'status': 'SUCCESS',
-        'stages': [
+        'stages_completed': [
             'System Health Check',
             'Data Ingestion (USGS API)', 
             'Spatial Processing (ETL)',
-            'DBSCAN Clustering',
-            'API Data Availability'
+            'DBSCAN Clustering'
         ],
-        'endpoints_ready': {
-            'api_docs': 'http://localhost:8000/docs',
-            'earthquake_data': 'http://localhost:8000/earthquakes',
+        'api_endpoints': {
+            'docs': 'http://localhost:8000/docs',
+            'earthquakes': 'http://localhost:8000/earthquakes',
             'clusters': 'http://localhost:8000/clusters',
-            'statistics': 'http://localhost:8000/stats'
+            'stats': 'http://localhost:8000/stats'
         },
-        'dashboard': 'http://localhost:8501',
-        'next_steps': [
-            'Check FastAPI endpoints at http://localhost:8000/docs',
-            'Access Streamlit dashboard at http://localhost:8501',
-            'Review cluster analysis and hazard zones',
-            'Verify 64MB data requirement compliance'
-        ],
+        'dashboard_url': 'http://localhost:8501',
         'timestamp': datetime.now().isoformat()
     }
     
@@ -109,6 +105,9 @@ def generate_pipeline_report(**context):
         json.dump(report, f, indent=2)
     
     logging.info(f"✅ Pipeline report saved: {report_path}")
+    logging.info(f" Access dashboard: http://localhost:8501")
+    logging.info(f" API docs: http://localhost:8000/docs")
+    
     return str(report_path)
 
 # Define tasks
@@ -122,6 +121,7 @@ task_trigger_ingestion = TriggerDagRunOperator(
     task_id='trigger_data_ingestion',
     trigger_dag_id='earthquake_data_ingestion',
     wait_for_completion=True,
+    reset_dag_run=True,
     dag=dag
 )
 
@@ -129,6 +129,7 @@ task_trigger_processing = TriggerDagRunOperator(
     task_id='trigger_spatial_processing', 
     trigger_dag_id='earthquake_spatial_processing',
     wait_for_completion=True,
+    reset_dag_run=True,
     dag=dag
 )
 
@@ -136,6 +137,7 @@ task_trigger_clustering = TriggerDagRunOperator(
     task_id='trigger_dbscan_clustering',
     trigger_dag_id='earthquake_dbscan_clustering', 
     wait_for_completion=True,
+    reset_dag_run=True,
     dag=dag
 )
 

@@ -8,7 +8,6 @@ import os
 sys.path.append('/opt/airflow/operators')
 sys.path.append('/opt/airflow/utils')
 from dbscan_operator import DBSCANClusterOperator
-from dvc_utils import DVCManager
 
 default_args = {
     'owner': 'magnitudr-team',
@@ -27,7 +26,7 @@ dag = DAG(
     description='🔬 DBSCAN clustering and hazard zone analysis',
     schedule_interval=None,  # Triggered by master DAG
     max_active_runs=1,
-    tags=['earthquake', 'clustering', 'dbscan', 'dvc']
+    tags=['earthquake', 'clustering', 'dbscan']
 )
 
 # Task 1: DBSCAN clustering analysis
@@ -40,94 +39,91 @@ task_dbscan = DBSCANClusterOperator(
     dag=dag
 )
 
-def trigger_dvc_versioning(**context):
-    """Trigger DVC add and push for data versioning"""
-    import logging
-    
-    try:
-        dvc_manager = DVCManager()
-        
-        # Add and push processed data
-        data_paths = [
-            '/opt/airflow/magnitudr/data/airflow_output/',
-        ]
-        
-        for path in data_paths:
-            if os.path.exists(path):
-                success = dvc_manager.add_and_push_data(path)
-                if success:
-                    logging.info(f"✅ DVC versioning successful: {path}")
-                else:
-                    logging.warning(f"⚠️ DVC versioning failed: {path}")
-        
-        return True
-        
-    except Exception as e:
-        logging.warning(f"⚠️ DVC versioning error: {e}")
-        # Don't fail the whole pipeline for DVC issues
-        return True
-
-task_dvc_version = PythonOperator(
-    task_id='trigger_dvc_versioning',
-    python_callable=trigger_dvc_versioning,
-    dag=dag
-)
-
 def generate_clustering_summary(**context):
-    """Generate clustering analysis summary"""
-    import psycopg2
+    """Generate clustering analysis summary with proper JSON serialization"""
+    from sqlalchemy import create_engine, text
     import pandas as pd
     import json
     import logging
+    import numpy as np
     
     try:
-        # Connect to database
-        conn = psycopg2.connect(
-            host="postgres",
-            port="5432",
-            database="magnitudr", 
-            user="postgres",
-            password="earthquake123"
-        )
+        # Create engine
+        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
         
-        # Get clustering statistics
-        query = """
-        SELECT 
-            risk_zone,
-            COUNT(DISTINCT cluster_id) as cluster_count,
-            COUNT(*) as total_events,
-            AVG(avg_magnitude) as avg_magnitude,
-            MAX(avg_magnitude) as max_magnitude
-        FROM earthquake_clusters
-        GROUP BY risk_zone
-        ORDER BY total_events DESC
-        """
+        # Get clustering statistics with proper data types
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT 
+                    risk_zone,
+                    COUNT(DISTINCT cluster_id) as cluster_count,
+                    COUNT(*) as total_events,
+                    AVG(avg_magnitude) as avg_magnitude,
+                    MAX(avg_magnitude) as max_magnitude
+                FROM earthquake_clusters
+                GROUP BY risk_zone
+                ORDER BY total_events DESC
+            """))
+            
+            risk_zones = []
+            for row in result:
+                risk_zone_data = {
+                    'risk_zone': str(row[0]) if row[0] else 'Unknown',
+                    'cluster_count': int(row[1]) if row[1] else 0,
+                    'total_events': int(row[2]) if row[2] else 0,
+                    'avg_magnitude': float(row[3]) if row[3] else 0.0,
+                    'max_magnitude': float(row[4]) if row[4] else 0.0
+                }
+                risk_zones.append(risk_zone_data)
         
-        df = pd.read_sql(query, conn)
-        conn.close()
+        # Get total clusters count
+        with engine.connect() as conn:
+            total_clusters_result = conn.execute(text("""
+                SELECT COUNT(DISTINCT cluster_id) as total_clusters
+                FROM earthquake_clusters
+                WHERE cluster_id IS NOT NULL
+            """))
+            total_clusters = total_clusters_result.scalar() or 0
         
-        # Generate summary report
+        # Generate summary report with JSON-safe data types
         summary = {
             'clustering_timestamp': datetime.now().isoformat(),
-            'total_clusters': len(df),
-            'risk_zones': df.to_dict('records'),
-            'high_risk_zones': len(df[df['risk_zone'].isin(['High', 'Extreme'])]),
-            'total_clustered_events': df['total_events'].sum()
+            'total_clusters': int(total_clusters),
+            'risk_zones': risk_zones,
+            'high_risk_zones': len([rz for rz in risk_zones if rz['risk_zone'] in ['High', 'Extreme']]),
+            'total_clustered_events': sum(rz['total_events'] for rz in risk_zones),
+            'pipeline_status': 'completed',
+            'data_quality': {
+                'risk_zone_diversity': len(risk_zones),
+                'largest_cluster_size': max([rz['total_events'] for rz in risk_zones]) if risk_zones else 0,
+                'magnitude_range': {
+                    'max': max([rz['max_magnitude'] for rz in risk_zones]) if risk_zones else 0.0,
+                    'avg': sum([rz['avg_magnitude'] for rz in risk_zones]) / len(risk_zones) if risk_zones else 0.0
+                }
+            }
         }
         
-        # Save summary
+        # Save summary with error handling
         summary_path = '/opt/airflow/magnitudr/data/airflow_output/clustering_summary.json'
+        os.makedirs(os.path.dirname(summary_path), exist_ok=True)
+        
         with open(summary_path, 'w') as f:
-            json.dump(summary, f, indent=2)
+            json.dump(summary, f, indent=2, default=str)  # default=str handles remaining type issues
         
         logging.info(f"✅ Clustering summary generated: {summary_path}")
-        logging.info(f"📊 Total clusters: {summary['total_clusters']}")
-        logging.info(f"🚨 High-risk zones: {summary['high_risk_zones']}")
+        logging.info(f" Total clusters: {summary['total_clusters']}")
+        logging.info(f" High-risk zones: {summary['high_risk_zones']}")
+        logging.info(f" Total events clustered: {summary['total_clustered_events']}")
+        
+        # Log detailed breakdown
+        for rz in risk_zones:
+            logging.info(f"   {rz['risk_zone']}: {rz['cluster_count']} clusters, {rz['total_events']} events")
         
         return summary['total_clusters']
         
     except Exception as e:
         logging.error(f"❌ Clustering summary failed: {e}")
+        logging.error(f"Error type: {type(e).__name__}")
         raise
 
 task_generate_summary = PythonOperator(
@@ -136,5 +132,51 @@ task_generate_summary = PythonOperator(
     dag=dag
 )
 
+def trigger_dvc_versioning(**context):
+    """Optional DVC versioning trigger"""
+    import logging
+    import subprocess
+    
+    try:
+        # Check if DVC is available
+        result = subprocess.run(
+            ["dvc", "status"],
+            cwd="/opt/airflow/magnitudr",
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            # DVC add and push
+            subprocess.run(
+                ["dvc", "add", "data/airflow_output/"],
+                cwd="/opt/airflow/magnitudr",
+                check=True,
+                timeout=60
+            )
+            
+            subprocess.run(
+                ["dvc", "push"],
+                cwd="/opt/airflow/magnitudr", 
+                check=True,
+                timeout=120
+            )
+            
+            logging.info("✅ DVC versioning completed")
+        else:
+            logging.warning("⚠️ DVC not properly configured - skipping versioning")
+            
+    except Exception as e:
+        logging.warning(f"⚠️ DVC versioning failed: {e} - continuing pipeline")
+    
+    return True
+
+task_dvc_version = PythonOperator(
+    task_id='trigger_dvc_versioning',
+    python_callable=trigger_dvc_versioning,
+    dag=dag
+)
+
 # Dependencies
-task_dbscan >> task_dvc_version >> task_generate_summary
+task_dbscan >> task_generate_summary >> task_dvc_version

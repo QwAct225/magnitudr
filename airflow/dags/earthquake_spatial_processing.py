@@ -22,7 +22,7 @@ default_args = {
 dag = DAG(
     'earthquake_spatial_processing',
     default_args=default_args,
-    description='🔄 Spatial processing and feature engineering',
+    description='Spatial processing and feature engineering',
     schedule_interval=None,  # Triggered by master DAG
     max_active_runs=1,
     tags=['earthquake', 'processing', 'spatial']
@@ -38,21 +38,23 @@ task_spatial_processing = SpatialDensityOperator(
 )
 
 def load_to_postgresql(**context):
-    """Load processed data to PostgreSQL earthquakes_processed table"""
+    """Load processed data to PostgreSQL with proper transaction handling"""
     import pandas as pd
     import psycopg2
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine, text
     import logging
     
     try:
         # Read processed data
         df = pd.read_csv('/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv')
+        logging.info(f"📊 Read {len(df)} records from processed file")
         
         # Database connection
         engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
         
         # Data type conversion and cleaning
-        df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
+        if 'time' in df.columns:
+            df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
         
         # Select columns matching database schema
         db_columns = [
@@ -65,13 +67,19 @@ def load_to_postgresql(**context):
         available_cols = [col for col in db_columns if col in df.columns]
         df_clean = df[available_cols].copy()
         
-        # Remove any existing data to avoid duplicates
-        with engine.connect() as conn:
-            conn.execute("DELETE FROM earthquakes_processed")
-            conn.commit()
+        logging.info(f"📊 Prepared {len(df_clean)} records with columns: {available_cols}")
         
-        # Load to PostgreSQL
-        df_clean.to_sql(
+        # SAFE DELETE: Handle foreign key constraints with proper transaction
+        with engine.begin() as conn:  # begin() provides auto-commit transaction
+            # Delete in proper order: child tables first
+            result1 = conn.execute(text("DELETE FROM earthquake_clusters"))
+            result2 = conn.execute(text("DELETE FROM hazard_zones"))
+            result3 = conn.execute(text("DELETE FROM earthquakes_processed"))
+            
+            logging.info(f"✅ Cleared existing data: clusters, hazard_zones, earthquakes_processed")
+        
+        # Load new data to PostgreSQL
+        rows_inserted = df_clean.to_sql(
             'earthquakes_processed',
             engine,
             if_exists='append',
@@ -80,12 +88,19 @@ def load_to_postgresql(**context):
         )
         
         logging.info(f"✅ Loaded {len(df_clean)} records to earthquakes_processed")
-        logging.info(f"📊 Columns: {available_cols}")
+        logging.info(f"📊 Columns loaded: {available_cols}")
+        
+        # Verify insertion
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM earthquakes_processed"))
+            count = result.scalar()
+            logging.info(f"✅ Verification: {count} records in database")
         
         return len(df_clean)
         
     except Exception as e:
         logging.error(f"❌ PostgreSQL loading failed: {e}")
+        logging.error(f"Error type: {type(e).__name__}")
         raise
 
 task_load_to_db = PythonOperator(

@@ -5,13 +5,13 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import logging
 import os
 
 class DBSCANClusterOperator(BaseOperator):
     """
-    Custom operator for DBSCAN clustering and hazard zone analysis
+    Fixed DBSCAN operator - clustering only, no duplicate data insertion
     """
     
     @apply_defaults
@@ -59,11 +59,8 @@ class DBSCANClusterOperator(BaseOperator):
             # Analyze clusters
             cluster_analysis = self._analyze_clusters(df)
             
-            # Store results in database
-            self._store_results(df, cluster_analysis)
-            
-            # Trigger DVC versioning
-            self._trigger_dvc_versioning()
+            # Store ONLY clustering results (not earthquake data)
+            self._store_clustering_results(df, cluster_analysis)
             
             n_clusters = len(cluster_analysis)
             logging.info(f"✅ DBSCAN completed: {n_clusters} clusters identified")
@@ -93,8 +90,8 @@ class DBSCANClusterOperator(BaseOperator):
                 'avg_magnitude': cluster_df['magnitude'].mean(),
                 'max_magnitude': cluster_df['magnitude'].max(),
                 'avg_depth': cluster_df['depth'].mean(),
-                'avg_hazard_score': cluster_df['hazard_score'].mean(),
-                'dominant_region': cluster_df['region'].mode().iloc[0] if not cluster_df['region'].mode().empty else 'Unknown'
+                'avg_hazard_score': cluster_df['hazard_score'].mean() if 'hazard_score' in cluster_df.columns else 5.0,
+                'dominant_region': cluster_df['region'].mode().iloc[0] if 'region' in cluster_df.columns and not cluster_df['region'].mode().empty else 'Unknown'
             }
             
             # Determine risk zone
@@ -115,56 +112,48 @@ class DBSCANClusterOperator(BaseOperator):
         
         return clusters
     
-    def _store_results(self, df, cluster_analysis):
-        """Store results in PostgreSQL database"""
+    def _store_clustering_results(self, df, cluster_analysis):
+        """Store ONLY clustering results, no earthquake data duplication"""
         try:
             engine = create_engine(self.db_connection)
             
-            # Store processed earthquake data
-            processed_df = df[df['cluster_id'].notna()].copy()
-            processed_df = processed_df.rename(columns={'time': 'time'})
+            # Clear existing clustering results
+            with engine.begin() as conn:
+                conn.execute(text("DELETE FROM earthquake_clusters"))
+                conn.execute(text("DELETE FROM hazard_zones"))
+                logging.info("✅ Cleared existing clustering data")
             
-            # Select columns that match database schema
-            db_columns = [
-                'id', 'magnitude', 'latitude', 'longitude', 'depth', 'time',
-                'place', 'spatial_density', 'hazard_score', 'region',
-                'magnitude_category', 'depth_category'
-            ]
-            
-            # Filter existing columns
-            available_columns = [col for col in db_columns if col in processed_df.columns]
-            processed_df[available_columns].to_sql(
-                'earthquakes_processed', 
-                engine, 
-                if_exists='append', 
-                index=False
-            )
-            
-            # Store cluster results
+            # Store cluster results for earthquakes that have cluster assignments
             cluster_records = []
-            for cluster in cluster_analysis:
-                cluster_df = processed_df[processed_df['cluster_id'] == cluster['cluster_id']]
+            clustered_df = df[df['cluster_id'].notna() & (df['cluster_id'] != -1)]
+            
+            for _, row in clustered_df.iterrows():
+                # Find the cluster analysis for this cluster_id
+                cluster_info = next((c for c in cluster_analysis if c['cluster_id'] == row['cluster_id']), None)
                 
-                for _, row in cluster_df.iterrows():
+                if cluster_info:
                     cluster_record = {
                         'id': row['id'],
-                        'cluster_id': cluster['cluster_id'],
-                        'cluster_label': cluster['cluster_label'],
-                        'risk_zone': cluster['risk_zone'],
-                        'centroid_lat': cluster['centroid_lat'],
-                        'centroid_lon': cluster['centroid_lon'],
-                        'cluster_size': cluster['size'],
-                        'avg_magnitude': cluster['avg_magnitude']
+                        'cluster_id': int(row['cluster_id']),
+                        'cluster_label': cluster_info['cluster_label'],
+                        'risk_zone': cluster_info['risk_zone'],
+                        'centroid_lat': cluster_info['centroid_lat'],
+                        'centroid_lon': cluster_info['centroid_lon'],
+                        'cluster_size': cluster_info['size'],
+                        'avg_magnitude': cluster_info['avg_magnitude']
                     }
                     cluster_records.append(cluster_record)
             
+            # Insert cluster records
             if cluster_records:
-                pd.DataFrame(cluster_records).to_sql(
+                cluster_df = pd.DataFrame(cluster_records)
+                cluster_df.to_sql(
                     'earthquake_clusters',
                     engine,
                     if_exists='append',
                     index=False
                 )
+                logging.info(f"✅ Stored {len(cluster_records)} cluster assignments")
             
             # Store aggregated hazard zones
             hazard_zones = []
@@ -180,44 +169,20 @@ class DBSCANClusterOperator(BaseOperator):
                 hazard_zones.append(hazard_zone)
             
             if hazard_zones:
-                pd.DataFrame(hazard_zones).to_sql(
+                hazard_df = pd.DataFrame(hazard_zones)
+                hazard_df.to_sql(
                     'hazard_zones',
                     engine,
                     if_exists='append',
                     index=False
                 )
+                logging.info(f"✅ Stored {len(hazard_zones)} hazard zones")
             
-            logging.info(f"✅ Stored {len(cluster_analysis)} clusters in database")
+            # Log cluster summary
+            logging.info(f"📊 Clustering Summary:")
+            for cluster in cluster_analysis:
+                logging.info(f"   Cluster {cluster['cluster_id']}: {cluster['size']} events, Risk: {cluster['risk_zone']}")
             
         except Exception as e:
-            logging.error(f"❌ Database storage failed: {e}")
+            logging.error(f"❌ Clustering results storage failed: {e}")
             raise
-    
-    def _trigger_dvc_versioning(self):
-        """Trigger DVC versioning for processed data"""
-        try:
-            import subprocess
-            
-            # DVC add and push
-            dvc_commands = [
-                "dvc add /opt/airflow/magnitudr/data/",
-                "dvc push"
-            ]
-            
-            for cmd in dvc_commands:
-                result = subprocess.run(
-                    cmd.split(),
-                    cwd="/opt/airflow/magnitudr",
-                    capture_output=True,
-                    text=True
-                )
-                
-                if result.returncode != 0:
-                    logging.warning(f"⚠️ DVC command failed: {cmd}")
-                    logging.warning(f"Error: {result.stderr}")
-                else:
-                    logging.info(f"✅ DVC command successful: {cmd}")
-            
-        except Exception as e:
-            logging.warning(f"⚠️ DVC versioning failed: {e}")
-            # Don't fail the whole task for DVC issues

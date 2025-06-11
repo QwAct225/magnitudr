@@ -11,7 +11,7 @@ sys.path.append('/opt/airflow/operators')
 default_args = {
     'owner': 'magnitudr-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 10),
+    'start_date': datetime(2025, 6, 10),  # Yesterday - must be in past for auto scheduling
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -23,7 +23,7 @@ dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
     description='🌍 Master earthquake analysis pipeline - production ready',
-    schedule_interval='0 19 * * *', # Daily at 02:00 WIB
+    schedule_interval='0 19 * * *',  # Daily at 02:00 WIB (19:00 UTC) - Best practice
     max_active_runs=1,
     tags=['earthquake', 'master', 'production']
 )
@@ -143,7 +143,29 @@ def run_dbscan_clustering(**context):
         logging.error(f"❌ DBSCAN clustering failed: {e}")
         raise
 
-def generate_master_report(**context):
+def run_ml_training(**context):
+    """Step 5: Machine Learning Training"""
+    logging.info("🤖 Starting ML training...")
+    
+    try:
+        from ml_classification_operator import EarthquakeMLClassificationOperator
+        
+        ml_operator = EarthquakeMLClassificationOperator(
+            task_id='ml_training',
+            db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
+            model_output_path='/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model.pkl',
+            test_size=0.2,
+            cv_folds=5,
+            random_state=42
+        )
+        
+        result = ml_operator.execute(context)
+        logging.info(f"✅ ML training completed: Accuracy {result:.4f}")
+        return result
+        
+    except Exception as e:
+        logging.error(f"❌ ML training failed: {e}")
+        raise
     """Step 5: Generate master pipeline report"""
     logging.info("📋 Generating master pipeline report...")
     
@@ -175,8 +197,21 @@ def generate_master_report(**context):
         """)
         risk_distribution = dict(cursor.fetchall())
         
-        cursor.close()
-        conn.close()
+        # Get ML model metrics if available
+        try:
+            import json
+            metrics_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_metrics.json'
+            if os.path.exists(metrics_path):
+                with open(metrics_path, 'r') as f:
+                    ml_metrics = json.load(f)
+                report['ml_model_performance'] = {
+                    'accuracy': ml_metrics.get('accuracy', 0),
+                    'f1_score': ml_metrics.get('f1_score', 0),
+                    'precision': ml_metrics.get('precision', 0),
+                    'recall': ml_metrics.get('recall', 0)
+                }
+        except:
+            report['ml_model_performance'] = {'status': 'not_available'}
         
         report = {
             'pipeline_name': 'Magnitudr Master Production Pipeline',
@@ -242,11 +277,17 @@ task_clustering = PythonOperator(
     dag=dag
 )
 
+task_ml_training = PythonOperator(
+    task_id='ml_training',
+    python_callable=run_ml_training,
+    dag=dag
+)
+
 task_report = PythonOperator(
     task_id='generate_master_report',
     python_callable=generate_master_report,
     dag=dag
 )
 
-# Production pipeline flow
-task_ingestion >> task_processing >> task_database >> task_clustering >> task_report
+# Production pipeline flow with ML
+task_ingestion >> task_processing >> task_database >> task_clustering >> task_ml_training >> task_report

@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timedelta
 import seaborn as sns
 import matplotlib.pyplot as plt
+import time
 
 # Page configuration
 st.set_page_config(
@@ -19,9 +20,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for earthquake theme
+# Custom CSS with Segment analytics blocking
 st.markdown("""
 <style>
+    /* Block Segment Analytics */
+    script[src*="segment.com"] { display: none !important; }
+    script[src*="analytics.js"] { display: none !important; }
+    
     .main-header {
         background: linear-gradient(90deg, #FF6B35, #F7931E);
         padding: 1rem;
@@ -50,62 +55,102 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# API Configuration
+# API Configuration with health check
 API_BASE_URL = "http://api:8000"
 
-# Utility Functions
-@st.cache_data(ttl=300)  # Cache for 5 minutes
-def fetch_api_data(endpoint):
-    """Fetch data from FastAPI with caching"""
+@st.cache_data(ttl=60)  # Cache for 1 minute
+def check_api_health():
+    """Check API health with timeout"""
     try:
-        response = requests.get(f"{API_BASE_URL}{endpoint}", timeout=10)
+        response = requests.get(f"{API_BASE_URL}/health", timeout=5)
         if response.status_code == 200:
-            return response.json()
+            return True, response.json()
         else:
-            st.error(f"API Error: {response.status_code}")
+            return False, None
+    except:
+        return False, None
+
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def fetch_api_data(endpoint, retries=3):
+    """Fetch data from FastAPI with retry logic"""
+    for attempt in range(retries):
+        try:
+            response = requests.get(f"{API_BASE_URL}{endpoint}", timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 500:
+                st.error(f"API Internal Error (500): {endpoint}")
+                return None
+            else:
+                st.warning(f"API Error {response.status_code}: {endpoint}")
+                return None
+        except requests.exceptions.ConnectionError:
+            if attempt == 0:
+                st.warning("🔄 Connecting to API...")
+            time.sleep(2)  # Wait before retry
+        except Exception as e:
+            st.error(f"API Request Error: {e}")
             return None
-    except requests.exceptions.ConnectionError:
-        st.warning("⚠️ API not available. Using fallback data mode.")
-        return None
-    except Exception as e:
-        st.error(f"Error fetching data: {e}")
-        return None
+    
+    st.error("⚠️ API unavailable. Using fallback data.")
+    return None
 
 @st.cache_data(ttl=600)  # Cache for 10 minutes
-def load_fallback_data():
-    """Load data from files if API unavailable"""
-    try:
-        # Try to load processed data directly
-        data_path = "/app/data/airflow_output/processed_earthquake_data.csv"
-        if pd.io.common.file_exists(data_path):
-            return pd.read_csv(data_path)
-        else:
-            # Generate sample data for demo
-            return generate_sample_data()
-    except Exception as e:
-        st.error(f"Error loading fallback data: {e}")
-        return generate_sample_data()
-
-def generate_sample_data():
-    """Generate sample earthquake data for demo purposes"""
+def generate_demo_data():
+    """Generate comprehensive demo data for testing"""
     np.random.seed(42)
-    n_points = 500
+    n_points = 1500  # Increased sample size
     
-    # Indonesian coordinates
-    lat_range = (-11, 6)
-    lon_range = (95, 141)
-    
-    data = {
-        'id': [f'demo_{i}' for i in range(n_points)],
-        'latitude': np.random.uniform(lat_range[0], lat_range[1], n_points),
-        'longitude': np.random.uniform(lon_range[0], lon_range[1], n_points),
-        'magnitude': np.random.exponential(1.5, n_points) + 3,
-        'depth': np.random.exponential(50, n_points) + 5,
-        'hazard_score': np.random.uniform(1, 10, n_points),
-        'region': np.random.choice(['Java', 'Sumatra', 'Sulawesi', 'Eastern_Indonesia', 'Kalimantan'], n_points),
-        'cluster_id': np.random.randint(-1, 8, n_points),
-        'risk_zone': np.random.choice(['Low', 'Moderate', 'High', 'Extreme'], n_points, p=[0.4, 0.3, 0.2, 0.1])
+    # Indonesia coordinates with regional focus
+    regions = {
+        'Java': {'lat_range': (-8.5, -5.5), 'lon_range': (106, 115), 'weight': 0.3},
+        'Sumatra': {'lat_range': (-6, 6), 'lon_range': (95, 106), 'weight': 0.25},
+        'Sulawesi': {'lat_range': (-6, 2), 'lon_range': (118, 125), 'weight': 0.2},
+        'Eastern_Indonesia': {'lat_range': (-11, 2), 'lon_range': (125, 141), 'weight': 0.15},
+        'Kalimantan': {'lat_range': (-4, 5), 'lon_range': (108, 117), 'weight': 0.1}
     }
+    
+    data = []
+    for i in range(n_points):
+        # Select region based on weights
+        region = np.random.choice(list(regions.keys()), p=list(r['weight'] for r in regions.values()))
+        reg_info = regions[region]
+        
+        # Generate coordinates within region
+        lat = np.random.uniform(reg_info['lat_range'][0], reg_info['lat_range'][1])
+        lon = np.random.uniform(reg_info['lon_range'][0], reg_info['lon_range'][1])
+        
+        # Generate realistic earthquake parameters
+        magnitude = np.random.exponential(1.8) + 2.5  # More realistic magnitude distribution
+        depth = np.random.exponential(40) + 5  # Depth distribution
+        
+        # Risk zone based on magnitude and depth
+        if magnitude >= 6.5 or (magnitude >= 5.5 and depth < 30):
+            risk_zone = 'Extreme'
+        elif magnitude >= 5.0 or (magnitude >= 4.5 and depth < 50):
+            risk_zone = 'High'
+        elif magnitude >= 4.0:
+            risk_zone = 'Moderate'
+        else:
+            risk_zone = 'Low'
+        
+        # Hazard score calculation
+        hazard_score = min(magnitude + (70 - depth) / 20, 10)
+        
+        earthquake = {
+            'id': f'demo_{i:04d}',
+            'latitude': lat,
+            'longitude': lon,
+            'magnitude': round(magnitude, 1),
+            'depth': round(depth, 1),
+            'hazard_score': round(hazard_score, 1),
+            'region': region,
+            'cluster_id': np.random.randint(-1, 12),
+            'risk_zone': risk_zone,
+            'time': (datetime.now() - timedelta(days=np.random.randint(0, 180))).isoformat(),
+            'place': f'{region} Region Demo Event'
+        }
+        data.append(earthquake)
     
     return pd.DataFrame(data)
 
@@ -117,53 +162,49 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# API Health Check
+api_healthy, health_data = check_api_health()
+if api_healthy and health_data:
+    st.sidebar.success(f"✅ API Status: {health_data.get('status', 'unknown')}")
+    if 'earthquake_records' in health_data:
+        st.sidebar.info(f"📊 DB Records: {health_data['earthquake_records']:,}")
+else:
+    st.sidebar.warning("⚠️ API Offline - Demo Mode")
+
 # Page selection
 page = st.sidebar.selectbox(
     "📍 Navigate to:",
-    ["🗺️ Hazard Zone Map", "📊 Data Distribution", "📈 Temporal Analysis"],
+    ["🗺️ Hazard Zone Map", "📊 Data Distribution", "📈 Temporal Analysis", "🔧 System Status"],
     index=0
 )
 
-# Sidebar metrics - Real-time stats
-st.sidebar.markdown("### 📊 Live System Status")
-
-# Fetch system stats
-stats_data = fetch_api_data("/stats")
-if stats_data:
-    st.sidebar.metric("Total Earthquakes", f"{stats_data['total_earthquakes']:,}")
-    st.sidebar.metric("Clusters Identified", stats_data['total_clusters'])
-    st.sidebar.metric("High-Risk Zones", stats_data['high_risk_zones'])
-    st.sidebar.metric("Data Quality", f"{stats_data['data_quality_score']:.1%}")
-else:
-    st.sidebar.metric("Total Earthquakes", "12,847")
-    st.sidebar.metric("Clusters Identified", "23")
-    st.sidebar.metric("High-Risk Zones", "7")
-    st.sidebar.metric("Data Quality", "94.2%")
-
-# Data loading
-if stats_data:
-    earthquake_data = fetch_api_data("/earthquakes?limit=5000")
+# Load data based on API availability
+if api_healthy:
+    # Try to fetch real data
+    stats_data = fetch_api_data("/stats")
+    earthquake_data = fetch_api_data("/earthquakes?limit=2000")
     cluster_data = fetch_api_data("/clusters")
-    hazard_zones = fetch_api_data("/hazard-zones")
     
-    if earthquake_data:
+    if earthquake_data and stats_data:
         df_earthquakes = pd.DataFrame(earthquake_data)
+        st.sidebar.metric("📊 Live Data", "Active")
+        st.sidebar.metric("Total Earthquakes", f"{stats_data['total_earthquakes']:,}")
+        st.sidebar.metric("Clusters", stats_data['total_clusters'])
+        st.sidebar.metric("High-Risk Zones", stats_data['high_risk_zones'])
     else:
-        df_earthquakes = load_fallback_data()
-        
-    if cluster_data:
-        df_clusters = pd.DataFrame(cluster_data)
-    else:
-        df_clusters = None
-        
-    if hazard_zones:
-        df_hazards = pd.DataFrame(hazard_zones)
-    else:
-        df_hazards = None
+        # Fallback to demo data
+        df_earthquakes = generate_demo_data()
+        st.sidebar.metric("📊 Demo Data", "Active")
+        st.sidebar.metric("Total Earthquakes", f"{len(df_earthquakes):,}")
+        st.sidebar.metric("Clusters", "12")
+        st.sidebar.metric("High-Risk Zones", "4")
 else:
-    df_earthquakes = load_fallback_data()
-    df_clusters = None
-    df_hazards = None
+    # Demo mode
+    df_earthquakes = generate_demo_data()
+    st.sidebar.metric("📊 Demo Mode", "Active")
+    st.sidebar.metric("Total Earthquakes", f"{len(df_earthquakes):,}")
+    st.sidebar.metric("Clusters", "12")
+    st.sidebar.metric("High-Risk Zones", "4")
 
 # PAGE 1: HAZARD ZONE MAP
 if page == "🗺️ Hazard Zone Map":
@@ -213,109 +254,116 @@ if page == "🗺️ Hazard Zone Map":
     with col1:
         st.markdown("### 🗺️ Interactive Hazard Zone Map")
         
-        # Create folium map
-        center_lat = filtered_df['latitude'].mean()
-        center_lon = filtered_df['longitude'].mean()
-        
-        m = folium.Map(
-            location=[center_lat, center_lon],
-            zoom_start=5,
-            tiles='cartodbdark_matter'
-        )
-        
-        # Color mapping for risk zones
-        risk_colors = {
-            'Low': '#27AE60',      # Green
-            'Moderate': '#F39C12',  # Orange
-            'High': '#FF6B35',      # Red-Orange
-            'Extreme': '#E74C3C'    # Red
-        }
-        
-        # Add earthquake points
-        for idx, row in filtered_df.iterrows():
-            folium.CircleMarker(
-                location=[row['latitude'], row['longitude']],
-                radius=row['magnitude'] * 2,
-                popup=f"""
-                <b>Magnitude:</b> {row['magnitude']}<br>
-                <b>Risk Zone:</b> {row['risk_zone']}<br>
-                <b>Region:</b> {row['region']}<br>
-                <b>Depth:</b> {row['depth']:.1f} km<br>
-                <b>Hazard Score:</b> {row['hazard_score']:.1f}
-                """,
-                color=risk_colors.get(row['risk_zone'], '#BDC3C7'),
-                fill=True,
-                fillOpacity=0.7,
-                weight=2
-            ).add_to(m)
-        
-        # Display map
-        map_data = st_folium(m, width=700, height=500)
+        if not filtered_df.empty:
+            # Create folium map
+            center_lat = filtered_df['latitude'].mean()
+            center_lon = filtered_df['longitude'].mean()
+            
+            m = folium.Map(
+                location=[center_lat, center_lon],
+                zoom_start=5,
+                tiles='cartodbdark_matter'
+            )
+            
+            # Color mapping for risk zones
+            risk_colors = {
+                'Low': '#27AE60',      # Green
+                'Moderate': '#F39C12',  # Orange
+                'High': '#FF6B35',      # Red-Orange
+                'Extreme': '#E74C3C'    # Red
+            }
+            
+            # Add earthquake points (sample for performance)
+            sample_df = filtered_df.sample(n=min(500, len(filtered_df)), random_state=42)
+            
+            for idx, row in sample_df.iterrows():
+                folium.CircleMarker(
+                    location=[row['latitude'], row['longitude']],
+                    radius=max(row['magnitude'], 2),
+                    popup=f"""
+                    <b>Magnitude:</b> {row['magnitude']}<br>
+                    <b>Risk Zone:</b> {row['risk_zone']}<br>
+                    <b>Region:</b> {row['region']}<br>
+                    <b>Depth:</b> {row['depth']:.1f} km<br>
+                    <b>Hazard Score:</b> {row['hazard_score']:.1f}
+                    """,
+                    color=risk_colors.get(row['risk_zone'], '#BDC3C7'),
+                    fill=True,
+                    fillOpacity=0.7,
+                    weight=2
+                ).add_to(m)
+            
+            # Display map
+            map_data = st_folium(m, width=700, height=500)
+        else:
+            st.warning("No data matches current filters")
     
     with col2:
         st.markdown("### 📊 Risk Zone Statistics")
         
-        # Risk zone distribution
-        risk_counts = filtered_df['risk_zone'].value_counts()
-        
-        for risk_zone in ['Extreme', 'High', 'Moderate', 'Low']:
-            if risk_zone in risk_counts.index:
-                count = risk_counts[risk_zone]
-                percentage = (count / len(filtered_df)) * 100
-                
-                st.markdown(f"""
-                <div class='metric-card risk-{risk_zone.lower()}'>
-                    <h4>{risk_zone} Risk</h4>
-                    <h2>{count:,}</h2>
-                    <p>{percentage:.1f}% of events</p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True)
+        if not filtered_df.empty:
+            # Risk zone distribution
+            risk_counts = filtered_df['risk_zone'].value_counts()
+            
+            for risk_zone in ['Extreme', 'High', 'Moderate', 'Low']:
+                if risk_zone in risk_counts.index:
+                    count = risk_counts[risk_zone]
+                    percentage = (count / len(filtered_df)) * 100
+                    
+                    st.markdown(f"""
+                    <div class='metric-card risk-{risk_zone.lower()}'>
+                        <h4>{risk_zone} Risk</h4>
+                        <h2>{count:,}</h2>
+                        <p>{percentage:.1f}% of events</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
     
     # Bottom charts
-    st.markdown("### 📈 Risk Analysis Charts")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Magnitude vs Risk Zone
-        fig_scatter = px.scatter(
-            filtered_df,
-            x='magnitude',
-            y='depth',
-            color='risk_zone',
-            color_discrete_map=risk_colors,
-            size='hazard_score',
-            hover_data=['region'],
-            title='Magnitude vs Depth by Risk Zone',
-            labels={'magnitude': 'Magnitude', 'depth': 'Depth (km)'}
-        )
-        fig_scatter.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white')
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
-    
-    with col2:
-        # Regional risk distribution
-        risk_region = filtered_df.groupby(['region', 'risk_zone']).size().reset_index(name='count')
+    if not filtered_df.empty:
+        st.markdown("### 📈 Risk Analysis Charts")
         
-        fig_bar = px.bar(
-            risk_region,
-            x='region',
-            y='count',
-            color='risk_zone',
-            color_discrete_map=risk_colors,
-            title='Risk Distribution by Region',
-            labels={'count': 'Number of Events', 'region': 'Region'}
-        )
-        fig_bar.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white')
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Magnitude vs Risk Zone
+            fig_scatter = px.scatter(
+                filtered_df,
+                x='magnitude',
+                y='depth',
+                color='risk_zone',
+                color_discrete_map=risk_colors,
+                size='hazard_score',
+                hover_data=['region'],
+                title='Magnitude vs Depth by Risk Zone',
+                labels={'magnitude': 'Magnitude', 'depth': 'Depth (km)'}
+            )
+            fig_scatter.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        with col2:
+            # Regional risk distribution
+            risk_region = filtered_df.groupby(['region', 'risk_zone']).size().reset_index(name='count')
+            
+            fig_bar = px.bar(
+                risk_region,
+                x='region',
+                y='count',
+                color='risk_zone',
+                color_discrete_map=risk_colors,
+                title='Risk Distribution by Region',
+                labels={'count': 'Number of Events', 'region': 'Region'}
+            )
+            fig_bar.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
 
 # PAGE 2: DATA DISTRIBUTION  
 elif page == "📊 Data Distribution":
@@ -404,23 +452,33 @@ elif page == "📈 Temporal Analysis":
     </div>
     """, unsafe_allow_html=True)
     
-    # Time-based analysis (using sample data for demo)
-    # Generate time series data
-    date_range = pd.date_range(start='2024-01-01', end='2025-06-11', freq='D')
-    daily_counts = np.random.poisson(5, len(date_range))
+    # Generate time series data from actual earthquake data
+    if 'time' in df_earthquakes.columns:
+        # Convert time column to datetime
+        df_earthquakes['time_dt'] = pd.to_datetime(df_earthquakes['time'], errors='coerce')
+        df_earthquakes['date'] = df_earthquakes['time_dt'].dt.date
+        
+        # Daily aggregation
+        daily_counts = df_earthquakes.groupby('date').agg({
+            'magnitude': ['count', 'mean', 'max']
+        }).reset_index()
+        daily_counts.columns = ['date', 'earthquake_count', 'avg_magnitude', 'max_magnitude']
+        
+    else:
+        # Generate sample time series
+        date_range = pd.date_range(start='2024-01-01', end='2025-06-11', freq='D')
+        daily_counts = pd.DataFrame({
+            'date': date_range,
+            'earthquake_count': np.random.poisson(3, len(date_range)),
+            'avg_magnitude': np.random.normal(4.2, 0.8, len(date_range))
+        })
     
-    time_series_df = pd.DataFrame({
-        'date': date_range,
-        'earthquake_count': daily_counts,
-        'avg_magnitude': np.random.normal(4.2, 0.8, len(date_range))
-    })
-    
-    # Time series plot
+    # Time series plots
     col1, col2 = st.columns(2)
     
     with col1:
         fig_time = px.line(
-            time_series_df,
+            daily_counts,
             x='date',
             y='earthquake_count',
             title='Daily Earthquake Frequency',
@@ -435,7 +493,7 @@ elif page == "📈 Temporal Analysis":
     
     with col2:
         fig_mag_time = px.line(
-            time_series_df,
+            daily_counts,
             x='date',
             y='avg_magnitude',
             title='Average Daily Magnitude',
@@ -447,49 +505,63 @@ elif page == "📈 Temporal Analysis":
             font=dict(color='white')
         )
         st.plotly_chart(fig_mag_time, use_container_width=True)
+
+# PAGE 4: SYSTEM STATUS
+elif page == "🔧 System Status":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>🔧 System Status & Pipeline Health</h1>
+        <p>Monitor Airflow pipeline status and data quality metrics</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Seasonal patterns
-    if 'time' in df_earthquakes.columns:
-        try:
-            df_earthquakes['time'] = pd.to_datetime(df_earthquakes['time'])
-            df_earthquakes['month'] = df_earthquakes['time'].dt.month
-            df_earthquakes['hour'] = df_earthquakes['time'].dt.hour
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("### 🔄 Pipeline Status")
+        
+        # API Health
+        if api_healthy and health_data:
+            st.success(f"✅ FastAPI: {health_data.get('status', 'unknown')}")
+            st.info(f"📊 Database Records: {health_data.get('earthquake_records', 0):,}")
+        else:
+            st.warning("⚠️ FastAPI: Offline")
+        
+        # Check data volume
+        data_volume = fetch_api_data("/data-volume")
+        if data_volume:
+            st.markdown("### 📈 Data Volume Status")
             
-            col1, col2 = st.columns(2)
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.metric("📊 Records", f"{data_volume['record_count']:,}")
+            with col_b:
+                st.metric("💾 Size (MB)", f"{data_volume['estimated_size_mb']:.1f}")
+            with col_c:
+                meets_req = data_volume['meets_64mb_requirement']
+                st.metric("✅ 64MB Req", "✅ Met" if meets_req else "❌ Not Met")
             
-            with col1:
-                monthly_pattern = df_earthquakes.groupby('month').size()
-                fig_monthly = px.bar(
-                    x=monthly_pattern.index,
-                    y=monthly_pattern.values,
-                    title='Seasonal Pattern (Monthly)',
-                    labels={'x': 'Month', 'y': 'Earthquake Count'},
-                    color_discrete_sequence=['#27AE60']
-                )
-                fig_monthly.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white')
-                )
-                st.plotly_chart(fig_monthly, use_container_width=True)
-            
-            with col2:
-                hourly_pattern = df_earthquakes.groupby('hour').size()
-                fig_hourly = px.bar(
-                    x=hourly_pattern.index,
-                    y=hourly_pattern.values,
-                    title='Hourly Pattern',
-                    labels={'x': 'Hour', 'y': 'Earthquake Count'},
-                    color_discrete_sequence=['#9B59B6']
-                )
-                fig_hourly.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white')
-                )
-                st.plotly_chart(fig_hourly, use_container_width=True)
-        except:
-            st.info("📅 Temporal data processing... Sample patterns shown above.")
+            if not meets_req:
+                st.warning(data_volume.get('recommendation', 'Consider increasing data collection period'))
+    
+    with col2:
+        st.markdown("### 🎯 Quick Actions")
+        
+        # Manual data refresh
+        if st.button("🔄 Refresh Data"):
+            st.cache_data.clear()
+            st.rerun()
+        
+        # API endpoints
+        st.markdown("### 🔗 API Endpoints")
+        st.markdown("- [API Docs](http://localhost:8000/docs)")
+        st.markdown("- [Health Check](http://localhost:8000/health)")
+        st.markdown("- [Statistics](http://localhost:8000/stats)")
+        
+        # Airflow links
+        st.markdown("### ⚙️ Airflow")
+        st.markdown("- [Airflow UI](http://localhost:8080)")
+        st.markdown("- [Master Pipeline](http://localhost:8080/dags/earthquake_master_pipeline)")
 
 # Footer
 st.markdown("---")

@@ -76,7 +76,7 @@ def fetch_api_data(endpoint, retries=3):
                 return None
         except requests.exceptions.ConnectionError:
             if attempt == 0:
-                st.warning("🔄 Connecting to API...")
+                st.warning("Connecting to API...")
             time.sleep(2)
         except Exception as e:
             st.error(f"API Request Error: {e}")
@@ -105,14 +105,14 @@ def safe_get_column(df, column_name, default_value=None):
 # Sidebar Navigation
 st.sidebar.markdown("""
 <div style='text-align: center; padding: 1rem; background: linear-gradient(135deg, #FF6B35, #F7931E); border-radius: 10px; margin-bottom: 1rem;'>
-    <h2 style='color: white; margin: 0;'>🌍 Magnitudr</h2>
+    <h2 style='color: white; margin: 0;'>Magnitudr</h2>
     <p style='color: white; margin: 0;'>Earthquake Hazard Detection</p>
 </div>
 """, unsafe_allow_html=True)
 
 # Page selection
 page = st.sidebar.selectbox(
-    "📍 Navigate to:",
+    "Navigate:",
     ["🗺️ Hazard Zone Map", "📊 Data Distribution", "📈 Temporal Analysis", "🔧 System Status"],
     index=0
 )
@@ -248,7 +248,7 @@ if page == "🗺️ Hazard Zone Map":
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        st.markdown("### 🗺️ Interactive Hazard Zone Map")
+        st.markdown("### Interactive Hazard Zone Map")
         
         if not filtered_df.empty:
             # Create map
@@ -329,33 +329,327 @@ elif page == "📊 Data Distribution":
     st.markdown("""
     <div class='main-header'>
         <h1>📊 Earthquake Data Distribution Analysis</h1>
-        <p>Comprehensive analysis of processed earthquake data</p>
+        <p>Comprehensive analysis of processed earthquake data and ETL insights</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Metrics
+    # Data quality metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric("📊 Total Records", f"{len(df_earthquakes):,}")
     with col2:
-        st.metric("🌍 Regions", df_earthquakes['region'].nunique())
+        st.metric("🌍 Regions Covered", df_earthquakes['region'].nunique())
     with col3:
         st.metric("⚡ Avg Magnitude", f"{df_earthquakes['magnitude'].mean():.2f}")
     with col4:
         avg_hazard = df_earthquakes['hazard_score'].mean() if 'hazard_score' in df_earthquakes.columns else 0
         st.metric("🎯 Avg Hazard Score", f"{avg_hazard:.2f}")
+    
+    # Distribution charts
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Magnitude distribution
+        try:
+            fig_hist = px.histogram(
+                df_earthquakes,
+                x='magnitude',
+                nbins=30,
+                title='Magnitude Distribution',
+                color_discrete_sequence=['#FF6B35']
+            )
+            fig_hist.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            st.plotly_chart(fig_hist, use_container_width=True)
+        except Exception as e:
+            st.error(f"Magnitude plot error: {e}")
+    
+    with col2:
+        # Depth distribution by region
+        try:
+            if 'region' in df_earthquakes.columns:
+                fig_depth = px.box(
+                    df_earthquakes,
+                    x='region',
+                    y='depth',
+                    title='Depth Distribution by Region',
+                    color='region'
+                )
+                fig_depth.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_depth, use_container_width=True)
+            else:
+                # Fallback: Simple depth histogram
+                fig_depth = px.histogram(
+                    df_earthquakes,
+                    x='depth',
+                    title='Depth Distribution',
+                    color_discrete_sequence=['#3498DB']
+                )
+                fig_depth.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_depth, use_container_width=True)
+        except Exception as e:
+            st.error(f"Depth plot error: {e}")
+    
+    # Risk zone distribution
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        try:
+            if 'risk_zone' in df_earthquakes.columns:
+                risk_counts = df_earthquakes['risk_zone'].value_counts()
+                fig_risk = px.pie(
+                    values=risk_counts.values,
+                    names=risk_counts.index,
+                    title='Risk Zone Distribution',
+                    color_discrete_map={
+                        'Extreme': '#E74C3C',
+                        'High': '#FF6B35',
+                        'Moderate': '#F39C12',
+                        'Low': '#27AE60',
+                        'Unknown': '#BDC3C7'
+                    }
+                )
+                fig_risk.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_risk, use_container_width=True)
+        except Exception as e:
+            st.error(f"Risk zone plot error: {e}")
+    
+    with col2:
+        try:
+            if 'magnitude_category' in df_earthquakes.columns:
+                mag_counts = df_earthquakes['magnitude_category'].value_counts()
+                fig_mag_cat = px.bar(
+                    x=mag_counts.index,
+                    y=mag_counts.values,
+                    title='Magnitude Categories',
+                    color=mag_counts.values,
+                    color_continuous_scale='Reds'
+                )
+                fig_mag_cat.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_mag_cat, use_container_width=True)
+        except Exception as e:
+            st.error(f"Magnitude category plot error: {e}")
+    
+    # Correlation heatmap
+    st.markdown("### 🔥 Feature Correlation Analysis")
+    
+    try:
+        numeric_cols = ['magnitude', 'depth', 'hazard_score', 'latitude', 'longitude', 'spatial_density']
+        available_cols = [col for col in numeric_cols if col in df_earthquakes.columns]
+        
+        if len(available_cols) > 1:
+            # Select numeric data only
+            numeric_df = df_earthquakes[available_cols].select_dtypes(include=[np.number])
+            
+            if not numeric_df.empty and len(numeric_df.columns) > 1:
+                corr_matrix = numeric_df.corr()
+                
+                fig_heatmap = px.imshow(
+                    corr_matrix,
+                    text_auto=True,
+                    color_continuous_scale='RdYlBu_r',
+                    title='Feature Correlation Matrix',
+                    aspect='auto'
+                )
+                fig_heatmap.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_heatmap, use_container_width=True)
+            else:
+                st.info("📊 Insufficient numeric data for correlation analysis")
+        else:
+            st.info("📊 Insufficient columns for correlation analysis")
+    except Exception as e:
+        st.error(f"Correlation analysis error: {e}")
 
 # PAGE 3: TEMPORAL ANALYSIS
 elif page == "📈 Temporal Analysis":
     st.markdown("""
     <div class='main-header'>
         <h1>📈 Temporal Earthquake Analysis</h1>
-        <p>Time-series analysis and patterns</p>
+        <p>Time-series analysis and earthquake frequency patterns</p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.info("📊 Temporal analysis available with time-series data")
+    # Check if time data is available
+    has_time_data = 'time' in df_earthquakes.columns and df_earthquakes['time'].notna().any()
+    
+    if has_time_data:
+        try:
+            # Process real time data
+            df_earthquakes['time_dt'] = pd.to_datetime(df_earthquakes['time'], errors='coerce')
+            df_earthquakes = df_earthquakes.dropna(subset=['time_dt'])
+            
+            if not df_earthquakes.empty:
+                # Daily aggregation
+                df_earthquakes['date'] = df_earthquakes['time_dt'].dt.date
+                daily_stats = df_earthquakes.groupby('date').agg({
+                    'magnitude': ['count', 'mean', 'max'],
+                    'depth': 'mean'
+                }).reset_index()
+                
+                daily_stats.columns = ['date', 'earthquake_count', 'avg_magnitude', 'max_magnitude', 'avg_depth']
+                
+                # Time series plots
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig_time = px.line(
+                        daily_stats,
+                        x='date',
+                        y='earthquake_count',
+                        title='Daily Earthquake Frequency (Real Data)',
+                        color_discrete_sequence=['#FF6B35']
+                    )
+                    fig_time.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='white')
+                    )
+                    st.plotly_chart(fig_time, use_container_width=True)
+                
+                with col2:
+                    fig_mag_time = px.line(
+                        daily_stats,
+                        x='date',
+                        y='avg_magnitude',
+                        title='Average Daily Magnitude (Real Data)',
+                        color_discrete_sequence=['#F39C12']
+                    )
+                    fig_mag_time.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='white')
+                    )
+                    st.plotly_chart(fig_mag_time, use_container_width=True)
+                
+                # Seasonal patterns
+                df_earthquakes['month'] = df_earthquakes['time_dt'].dt.month
+                df_earthquakes['hour'] = df_earthquakes['time_dt'].dt.hour
+                df_earthquakes['year'] = df_earthquakes['time_dt'].dt.year
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    monthly_pattern = df_earthquakes.groupby('month').size()
+                    fig_monthly = px.bar(
+                        x=monthly_pattern.index,
+                        y=monthly_pattern.values,
+                        title='Seasonal Pattern (Monthly) - Real Data',
+                        labels={'x': 'Month', 'y': 'Earthquake Count'},
+                        color_discrete_sequence=['#27AE60']
+                    )
+                    fig_monthly.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='white')
+                    )
+                    st.plotly_chart(fig_monthly, use_container_width=True)
+                
+                with col2:
+                    yearly_pattern = df_earthquakes.groupby('year').size()
+                    fig_yearly = px.bar(
+                        x=yearly_pattern.index,
+                        y=yearly_pattern.values,
+                        title='Yearly Pattern - Real Data',
+                        labels={'x': 'Year', 'y': 'Earthquake Count'},
+                        color_discrete_sequence=['#9B59B6']
+                    )
+                    fig_yearly.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='white')
+                    )
+                    st.plotly_chart(fig_yearly, use_container_width=True)
+                
+                # Additional temporal insights
+                st.markdown("### 📅 Temporal Insights")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("📊 Data Span", f"{df_earthquakes['year'].min()}-{df_earthquakes['year'].max()}")
+                with col2:
+                    st.metric("📈 Peak Year", f"{yearly_pattern.idxmax()}")
+                with col3:
+                    st.metric("🌙 Peak Month", f"{monthly_pattern.idxmax()}")
+                with col4:
+                    avg_daily = daily_stats['earthquake_count'].mean()
+                    st.metric("📊 Avg Daily", f"{avg_daily:.1f}")
+            
+            else:
+                st.warning("⚠️ No valid time data found after processing")
+                
+        except Exception as e:
+            st.error(f"Temporal analysis error: {e}")
+            has_time_data = False
+    
+    if not has_time_data:
+        st.info("📊 Time data not available - showing sample patterns")
+        
+        # Fallback: Generate sample time series
+        date_range = pd.date_range(start='2024-01-01', end='2025-06-11', freq='D')
+        daily_counts = np.random.poisson(5, len(date_range))
+        
+        time_series_df = pd.DataFrame({
+            'date': date_range,
+            'earthquake_count': daily_counts,
+            'avg_magnitude': np.random.normal(4.2, 0.8, len(date_range))
+        })
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig_time = px.line(
+                time_series_df,
+                x='date',
+                y='earthquake_count',
+                title='Daily Earthquake Frequency',
+                color_discrete_sequence=['#FF6B35']
+            )
+            fig_time.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            st.plotly_chart(fig_time, use_container_width=True)
+        
+        with col2:
+            fig_mag_time = px.line(
+                time_series_df,
+                x='date',
+                y='avg_magnitude',
+                title='Average Daily Magnitude',
+                color_discrete_sequence=['#F39C12']
+            )
+            fig_mag_time.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            st.plotly_chart(fig_mag_time, use_container_width=True)
 
 # PAGE 4: SYSTEM STATUS
 elif page == "🔧 System Status":
@@ -367,7 +661,7 @@ elif page == "🔧 System Status":
     """, unsafe_allow_html=True)
     
     if api_healthy and health_data:
-        st.success(f"✅ API Status: {health_data.get('status', 'unknown')}")
+        st.success(f"✅ API Status: Connected")
         st.info(f"📊 Database Records: {health_data.get('earthquake_records', 0):,}")
     else:
         st.error("❌ API Status: Offline")

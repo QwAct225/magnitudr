@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 import pandas as pd
 import os
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel
 from datetime import datetime
 import logging
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +42,7 @@ class EarthquakeData(BaseModel):
     latitude: float
     longitude: float
     depth: float
-    time: datetime
+    time: Optional[datetime] = None
     place: str
     spatial_density: Optional[float] = None
     hazard_score: Optional[float] = None
@@ -66,7 +67,7 @@ class HazardZone(BaseModel):
     event_count: int
     center_lat: float
     center_lon: float
-    boundary_coordinates: str
+    boundary_coordinates: str  # Keep as string but handle JSON properly
 
 class SystemStats(BaseModel):
     total_earthquakes: int
@@ -107,16 +108,7 @@ async def get_earthquakes(
     region: Optional[str] = Query(default=None, description="Region filter"),
     risk_zone: Optional[str] = Query(default=None, description="Risk zone filter")
 ):
-    """
-    🌍 **Get earthquake data with advanced filtering**
-    
-    - **limit**: Maximum records to return (default: 1000, max: 10000)
-    - **min_magnitude**: Filter by minimum magnitude
-    - **region**: Filter by Indonesian region (Java, Sumatra, Sulawesi, etc.)
-    - **risk_zone**: Filter by risk assessment (Low, Moderate, High, Extreme)
-    
-    Returns processed earthquake data with spatial density and hazard scores.
-    """
+    """Get earthquake data with advanced filtering"""
     try:
         # Build dynamic query
         query = """
@@ -157,18 +149,18 @@ async def get_earthquakes(
         earthquakes = []
         for row in data:
             earthquakes.append(EarthquakeData(
-                id=row[0],
-                magnitude=row[1],
-                latitude=row[2], 
-                longitude=row[3],
-                depth=row[4],
+                id=str(row[0]),
+                magnitude=float(row[1]) if row[1] is not None else 0.0,
+                latitude=float(row[2]) if row[2] is not None else 0.0,
+                longitude=float(row[3]) if row[3] is not None else 0.0,
+                depth=float(row[4]) if row[4] is not None else 0.0,
                 time=row[5],
-                place=row[6],
-                spatial_density=row[7],
-                hazard_score=row[8],
-                region=row[9],
-                magnitude_category=row[10],
-                depth_category=row[11]
+                place=str(row[6]) if row[6] is not None else "",
+                spatial_density=float(row[7]) if row[7] is not None else 0.0,
+                hazard_score=float(row[8]) if row[8] is not None else 0.0,
+                region=str(row[9]) if row[9] is not None else "",
+                magnitude_category=str(row[10]) if row[10] is not None else "",
+                depth_category=str(row[11]) if row[11] is not None else ""
             ))
         
         logger.info(f"✅ Retrieved {len(earthquakes)} earthquake records")
@@ -183,14 +175,7 @@ async def get_clusters(
     risk_zone: Optional[str] = Query(default=None, description="Filter by risk zone"),
     min_cluster_size: Optional[int] = Query(default=None, description="Minimum cluster size")
 ):
-    """
-    🔬 **Get DBSCAN clustering results**
-    
-    - **risk_zone**: Filter by risk assessment (Low, Moderate, High, Extreme)
-    - **min_cluster_size**: Minimum number of events in cluster
-    
-    Returns spatial clusters with risk zone analysis and centroid coordinates.
-    """
+    """Get DBSCAN clustering results"""
     try:
         query = """
         SELECT DISTINCT
@@ -219,14 +204,14 @@ async def get_clusters(
         clusters = []
         for row in data:
             clusters.append(ClusterData(
-                id=row[0],
-                cluster_id=row[1],
-                cluster_label=row[2],
-                risk_zone=row[3],
-                centroid_lat=row[4],
-                centroid_lon=row[5],
-                cluster_size=row[6],
-                avg_magnitude=row[7]
+                id=str(row[0]),
+                cluster_id=int(row[1]),
+                cluster_label=str(row[2]),
+                risk_zone=str(row[3]),
+                centroid_lat=float(row[4]),
+                centroid_lon=float(row[5]),
+                cluster_size=int(row[6]),
+                avg_magnitude=float(row[7])
             ))
         
         logger.info(f"✅ Retrieved {len(clusters)} cluster records")
@@ -240,13 +225,7 @@ async def get_clusters(
 async def get_hazard_zones(
     risk_level: Optional[str] = Query(default=None, description="Filter by risk level")
 ):
-    """
-    🚨 **Get aggregated hazard zones for Indonesia**
-    
-    - **risk_level**: Filter by risk level (Low, Moderate, High, Extreme)
-    
-    Returns aggregated hazard zones with geographic boundaries and event statistics.
-    """
+    """Get aggregated hazard zones for Indonesia"""
     try:
         query = """
         SELECT 
@@ -270,14 +249,21 @@ async def get_hazard_zones(
         
         hazard_zones = []
         for row in data:
+            # Convert boundary_coordinates to string if it's a dict
+            boundary_coords = row[6]
+            if isinstance(boundary_coords, dict):
+                boundary_coords = json.dumps(boundary_coords)
+            elif boundary_coords is None:
+                boundary_coords = "{}"
+            
             hazard_zones.append(HazardZone(
-                zone_id=row[0],
-                risk_level=row[1],
-                avg_magnitude=row[2],
-                event_count=row[3],
-                center_lat=row[4],
-                center_lon=row[5],
-                boundary_coordinates=row[6]
+                zone_id=int(row[0]),
+                risk_level=str(row[1]),
+                avg_magnitude=float(row[2]),
+                event_count=int(row[3]),
+                center_lat=float(row[4]),
+                center_lon=float(row[5]),
+                boundary_coordinates=str(boundary_coords)
             ))
         
         logger.info(f"✅ Retrieved {len(hazard_zones)} hazard zones")
@@ -289,22 +275,14 @@ async def get_hazard_zones(
 
 @app.get("/stats", response_model=SystemStats, summary="Get System Statistics")
 async def get_system_stats():
-    """
-    📊 **Get comprehensive system statistics**
-    
-    Returns overall system health and data quality metrics including:
-    - Total earthquake records processed
-    - Number of clusters identified  
-    - High-risk zones count
-    - Data quality assessment
-    """
+    """Get comprehensive system statistics"""
     try:
         with get_db_connection() as conn:
-            # Get earthquake statistics
+            # Get earthquake statistics - Fixed Decimal handling
             earthquake_stats = conn.execute(text("""
                 SELECT 
                     COUNT(*) as total_earthquakes,
-                    AVG(hazard_score) as avg_hazard_score
+                    CAST(AVG(hazard_score) AS FLOAT) as avg_hazard_score
                 FROM earthquakes_processed
             """)).fetchone()
             
@@ -323,13 +301,14 @@ async def get_system_stats():
                 WHERE risk_level IN ('High', 'Extreme')
             """)).fetchone()
             
-            # Calculate data quality score
-            data_quality = min(earthquake_stats[1] / 10.0, 1.0) if earthquake_stats[1] else 0.0
+            # Calculate data quality score - Fixed division
+            avg_hazard = float(earthquake_stats[1]) if earthquake_stats[1] is not None else 0.0
+            data_quality = min(avg_hazard / 10.0, 1.0) if avg_hazard > 0 else 0.0
         
         stats = SystemStats(
-            total_earthquakes=earthquake_stats[0] or 0,
-            total_clusters=cluster_stats[0] or 0,
-            high_risk_zones=high_risk_count[0] or 0,
+            total_earthquakes=int(earthquake_stats[0]) if earthquake_stats[0] else 0,
+            total_clusters=int(cluster_stats[0]) if cluster_stats[0] else 0,
+            high_risk_zones=int(high_risk_count[0]) if high_risk_count[0] else 0,
             last_update=datetime.now(),
             data_quality_score=round(data_quality, 3)
         )
@@ -343,19 +322,15 @@ async def get_system_stats():
 
 @app.get("/regions", summary="Get Available Regions")
 async def get_regions():
-    """
-    🗺️ **Get list of available Indonesian regions**
-    
-    Returns all regions with earthquake data and their event counts.
-    """
+    """Get list of available Indonesian regions"""
     try:
         with get_db_connection() as conn:
             result = conn.execute(text("""
                 SELECT 
                     region,
                     COUNT(*) as event_count,
-                    AVG(magnitude) as avg_magnitude,
-                    MAX(magnitude) as max_magnitude
+                    CAST(AVG(magnitude) AS FLOAT) as avg_magnitude,
+                    CAST(MAX(magnitude) AS FLOAT) as max_magnitude
                 FROM earthquakes_processed 
                 GROUP BY region
                 ORDER BY event_count DESC
@@ -365,9 +340,9 @@ async def get_regions():
             for row in result:
                 regions.append({
                     "region": row[0],
-                    "event_count": row[1],
-                    "avg_magnitude": round(row[2], 2),
-                    "max_magnitude": row[3]
+                    "event_count": int(row[1]),
+                    "avg_magnitude": round(float(row[2]), 2) if row[2] else 0.0,
+                    "max_magnitude": float(row[3]) if row[3] else 0.0
                 })
         
         logger.info(f"✅ Retrieved {len(regions)} regions")
@@ -377,14 +352,9 @@ async def get_regions():
         logger.error(f"❌ Failed to retrieve regions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Enhanced data ingestion endpoint for 64MB requirement
 @app.get("/data-volume", summary="Check Data Volume")
 async def check_data_volume():
-    """
-    📈 **Check current data volume and ingestion status**
-    
-    Verifies if minimum 64MB data requirement is met.
-    """
+    """Check current data volume and ingestion status"""
     try:
         with get_db_connection() as conn:
             # Get detailed data statistics
@@ -394,21 +364,21 @@ async def check_data_volume():
                     MIN(time) as earliest_record,
                     MAX(time) as latest_record,
                     COUNT(DISTINCT region) as unique_regions,
-                    AVG(magnitude) as avg_magnitude
+                    CAST(AVG(magnitude) AS FLOAT) as avg_magnitude
                 FROM earthquakes_processed
             """)).fetchone()
             
             # Estimate data size (rough calculation)
-            estimated_size_mb = (result[0] * 500) / (1024 * 1024) if result[0] else 0  # ~500 bytes per record
+            estimated_size_mb = (int(result[0]) * 500) / (1024 * 1024) if result[0] else 0  # ~500 bytes per record
             
         return {
-            "record_count": result[0] or 0,
+            "record_count": int(result[0]) if result[0] else 0,
             "estimated_size_mb": round(estimated_size_mb, 2),
             "meets_64mb_requirement": estimated_size_mb >= 64,
             "earliest_record": result[1],
             "latest_record": result[2],
-            "unique_regions": result[3] or 0,
-            "avg_magnitude": round(result[4], 2) if result[4] else 0,
+            "unique_regions": int(result[3]) if result[3] else 0,
+            "avg_magnitude": round(float(result[4]), 2) if result[4] else 0.0,
             "recommendation": "Increase time range in USGS ingestion if size < 64MB" if estimated_size_mb < 64 else "Data volume requirement satisfied"
         }
         

@@ -182,7 +182,7 @@ class EarthquakeMLClassificationOperator(BaseOperator):
             estimator=rf,
             param_grid=param_grid,
             cv=kfold,
-            scoring='f1_weighted',  # Use weighted F1 for imbalanced classes
+            scoring='f1_weighted',
             n_jobs=-1,
             verbose=1
         )
@@ -190,8 +190,8 @@ class EarthquakeMLClassificationOperator(BaseOperator):
         # Fit grid search
         grid_search.fit(X_train, y_train)
         
-        logging.info(f"🏆 Best parameters: {grid_search.best_params_}")
-        logging.info(f"🏆 Best CV score: {grid_search.best_score_:.4f}")
+        logging.info(f"• Best parameters: {grid_search.best_params_}")
+        logging.info(f"• Best CV score: {grid_search.best_score_:.4f}")
         
         return grid_search.best_estimator_
     

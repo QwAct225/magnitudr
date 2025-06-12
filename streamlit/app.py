@@ -113,7 +113,7 @@ st.sidebar.markdown("""
 # Page selection
 page = st.sidebar.selectbox(
     "Navigate:",
-    ["🗺️ Hazard Zone Map", "📊 Data Distribution", "📈 Temporal Analysis", "🔧 System Status"],
+    ["🗺️ Hazard Zone Map", "📊 Data Distribution", "📈 Temporal Analysis", "🤖 ML Model Performance", "🔧 System Status"],
     index=0
 )
 
@@ -191,7 +191,7 @@ if page == "🗺️ Hazard Zone Map":
     st.markdown("""
     <div class='main-header'>
         <h1>🌍 Indonesia Earthquake Hazard Zone Map</h1>
-        <p>Interactive visualization of seismic risk zones based on DBSCAN clustering analysis</p>
+        <p>Interactive visualization of seismic risk zones based on Hybrid DBSCAN-ML clustering analysis</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -279,7 +279,7 @@ if page == "🗺️ Hazard Zone Map":
                         radius=max(row['magnitude'], 2),
                         popup=f"""
                         <b>Magnitude:</b> {row['magnitude']}<br>
-                        <b>Risk Zone:</b> {row.get('risk_zone', 'Unknown')}<br>
+                        <b>Risk Zone:</b> {row.get('risk_zone', 'Unknown')} (ML-labeled)<br>
                         <b>Region:</b> {row.get('region', 'Unknown')}<br>
                         <b>Depth:</b> {row['depth']:.1f} km
                         """,
@@ -318,6 +318,7 @@ if page == "🗺️ Hazard Zone Map":
                             <h4>{risk_zone} Risk</h4>
                             <h2>{count:,}</h2>
                             <p>{percentage:.1f}% of events</p>
+                            <small>ML-labeled by hybrid system</small>
                         </div>
                         """, unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
@@ -329,7 +330,7 @@ elif page == "📊 Data Distribution":
     st.markdown("""
     <div class='main-header'>
         <h1>📊 Earthquake Data Distribution Analysis</h1>
-        <p>Comprehensive analysis of processed earthquake data and ETL insights</p>
+        <p>Comprehensive analysis of processed earthquake data and ETL pipeline insights</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -412,7 +413,7 @@ elif page == "📊 Data Distribution":
                 fig_risk = px.pie(
                     values=risk_counts.values,
                     names=risk_counts.index,
-                    title='Risk Zone Distribution',
+                    title='Risk Zone Distribution (ML-Labeled)',
                     color_discrete_map={
                         'Extreme': '#E74C3C',
                         'High': '#FF6B35',
@@ -651,25 +652,312 @@ elif page == "📈 Temporal Analysis":
             )
             st.plotly_chart(fig_mag_time, use_container_width=True)
 
-# PAGE 4: SYSTEM STATUS
+# PAGE 4: ML MODEL PERFORMANCE
+elif page == "🤖 ML Model Performance":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>🤖 Machine Learning Model Performance</h1>
+        <p>RandomForest vs LogisticRegression comparison with hybrid DBSCAN integration</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Fetch ML model comparison data
+    ml_comparison_data = fetch_api_data("/ml/model-comparison")
+    pipeline_status = fetch_api_data("/pipeline/status")
+    
+    if ml_comparison_data and ml_comparison_data.get('status') == 'success':
+        model_comparison = ml_comparison_data.get('model_comparison', {})
+        best_model = ml_comparison_data.get('best_model', 'Unknown')
+        
+        # Model comparison overview
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("🏆 Best Model", best_model)
+        with col2:
+            total_preds = ml_comparison_data.get('total_predictions', 0)
+            st.metric("🔮 Total Predictions", f"{total_preds:,}")
+        with col3:
+            if pipeline_status:
+                clusters = pipeline_status.get('data_pipeline', {}).get('clusters_identified', 0)
+                st.metric("🔬 Clusters Labeled", clusters)
+        with col4:
+            comparison_time = ml_comparison_data.get('comparison_timestamp', '')
+            if comparison_time:
+                try:
+                    dt = datetime.fromisoformat(comparison_time.replace('Z', '+00:00'))
+                    st.metric("⏰ Last Training", dt.strftime("%Y-%m-%d %H:%M"))
+                except:
+                    st.metric("⏰ Last Training", "Recent")
+        
+        # Model performance comparison
+        if model_comparison:
+            st.markdown("### 📊 Model Performance Comparison")
+            
+            # Create comparison DataFrame
+            comparison_df = pd.DataFrame(model_comparison).T
+            comparison_df = comparison_df.round(4)
+            
+            # Display comparison table
+            st.dataframe(comparison_df[['test_accuracy', 'precision', 'recall', 'f1_score', 'overfitting_gap']], 
+                        use_container_width=True)
+            
+            # Performance charts
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Accuracy comparison
+                models = list(model_comparison.keys())
+                accuracy_scores = [model_comparison[model]['test_accuracy'] for model in models]
+                
+                fig_acc = px.bar(
+                    x=models, y=accuracy_scores,
+                    title='Model Accuracy Comparison',
+                    labels={'x': 'Model', 'y': 'Test Accuracy'},
+                    color=accuracy_scores,
+                    color_continuous_scale='viridis'
+                )
+                fig_acc.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_acc, use_container_width=True)
+            
+            with col2:
+                # F1-Score comparison
+                f1_scores = [model_comparison[model]['f1_score'] for model in models]
+                
+                fig_f1 = px.bar(
+                    x=models, y=f1_scores,
+                    title='Model F1-Score Comparison',
+                    labels={'x': 'Model', 'y': 'F1-Score'},
+                    color=f1_scores,
+                    color_continuous_scale='plasma'
+                )
+                fig_f1.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white')
+                )
+                st.plotly_chart(fig_f1, use_container_width=True)
+            
+            # Overfitting analysis
+            st.markdown("### 🔍 Overfitting Analysis")
+            
+            overfitting_data = []
+            for model_name, metrics in model_comparison.items():
+                overfitting_data.append({
+                    'Model': model_name,
+                    'Train Accuracy': metrics['train_accuracy'],
+                    'Test Accuracy': metrics['test_accuracy'],
+                    'Overfitting Gap': metrics['overfitting_gap']
+                })
+            
+            overfitting_df = pd.DataFrame(overfitting_data)
+            
+            fig_overfit = px.scatter(
+                overfitting_df, 
+                x='Train Accuracy', y='Test Accuracy',
+                color='Model',
+                size='Overfitting Gap',
+                title='Overfitting Analysis (Train vs Test Accuracy)',
+                hover_data=['Overfitting Gap']
+            )
+            
+            # Add ideal line (train = test)
+            fig_overfit.add_shape(
+                type="line",
+                x0=0.8, y0=0.8, x1=1.0, y1=1.0,
+                line=dict(color="red", width=2, dash="dash"),
+                name="Ideal (No Overfitting)"
+            )
+            
+            fig_overfit.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            st.plotly_chart(fig_overfit, use_container_width=True)
+            
+            # Model interpretation
+            st.markdown("### 🧠 Model Insights")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Hybrid Architecture Benefits:**")
+                st.markdown("""
+                - **DBSCAN**: Spatial clustering based on geographic proximity
+                - **ML Model**: Data-driven risk zone labeling (replaces hard-coded thresholds)
+                - **Scientific**: Evidence-based risk assessment
+                - **Scalable**: Model improves with more training data
+                """)
+            
+            with col2:
+                st.markdown("**Performance Summary:**")
+                best_metrics = model_comparison.get(best_model, {})
+                st.markdown(f"""
+                - **Best Model**: {best_model}
+                - **Accuracy**: {best_metrics.get('test_accuracy', 0):.2%}
+                - **Precision**: {best_metrics.get('precision', 0):.2%}
+                - **Recall**: {best_metrics.get('recall', 0):.2%}
+                - **Overfitting**: {best_metrics.get('overfitting_gap', 0):.3f} (Good if < 0.05)
+                """)
+            
+            # Recommendation
+            recommendation = ml_comparison_data.get('recommendation', '')
+            if recommendation:
+                st.info(f"💡 **Recommendation**: {recommendation}")
+    
+    else:
+        st.warning("⚠️ ML model comparison data not available")
+        st.info("Please run the ML training pipeline first:")
+        st.code("docker exec magnitudr_airflow airflow dags trigger earthquake_weekly_ml_training")
+
+# PAGE 5: SYSTEM STATUS  
 elif page == "🔧 System Status":
     st.markdown("""
     <div class='main-header'>
         <h1>🔧 System Status & Pipeline Health</h1>
-        <p>Monitor system status and pipeline health</p>
+        <p>Monitor pipeline performance and data volume compliance</p>
     </div>
     """, unsafe_allow_html=True)
     
-    if api_healthy and health_data:
-        st.success(f"✅ API Status: Connected")
-        st.info(f"📊 Database Records: {health_data.get('earthquake_records', 0):,}")
+    # Fetch comprehensive status
+    pipeline_status = fetch_api_data("/pipeline/status")
+    data_volume = fetch_api_data("/data-volume")
+    
+    if pipeline_status:
+        # Overall health
+        health_status = pipeline_status.get('pipeline_status', 'unknown')
+        
+        if health_status == 'healthy':
+            st.success("✅ System Status: Healthy")
+        elif health_status == 'warning':
+            st.warning("⚠️ System Status: Warning")
+        else:
+            st.error("❌ System Status: Error")
+        
+        # Data pipeline status
+        data_pipeline = pipeline_status.get('data_pipeline', {})
+        ml_pipeline = pipeline_status.get('ml_pipeline', {})
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            earthquake_count = data_pipeline.get('earthquake_records', 0)
+            st.metric("📊 Earthquake Records", f"{earthquake_count:,}")
+        
+        with col2:
+            clusters = data_pipeline.get('clusters_identified', 0)
+            st.metric("🔬 Clusters", clusters)
+        
+        with col3:
+            predictions = ml_pipeline.get('predictions_generated', 0)
+            st.metric("🤖 ML Predictions", f"{predictions:,}")
+        
+        with col4:
+            models_trained = ml_pipeline.get('models_trained', 0)
+            st.metric("🎯 Models Trained", models_trained)
+        
+        # Data volume compliance
+        if data_volume:
+            st.markdown("### 📊 Data Volume Compliance")
+            
+            volume_status = data_volume.get('requirement_status', 'unknown')
+            size_analysis = data_volume.get('size_analysis', {})
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                estimated_size = size_analysis.get('estimated_size_mb', 0)
+                actual_size = size_analysis.get('total_actual_size_mb', 0)
+                meets_requirement = size_analysis.get('meets_64mb_requirement', False)
+                
+                if meets_requirement:
+                    st.success(f"✅ 64MB Requirement: PASSED")
+                else:
+                    st.error(f"❌ 64MB Requirement: FAILED")
+                
+                st.metric("💾 Estimated Size", f"{estimated_size:.2f} MB")
+                st.metric("📁 Actual File Size", f"{actual_size:.2f} MB")
+            
+            with col2:
+                data_stats = data_volume.get('data_statistics', {})
+                
+                st.markdown("**Data Statistics:**")
+                st.write(f"• Total Records: {data_stats.get('total_records', 0):,}")
+                st.write(f"• Unique Earthquakes: {data_stats.get('unique_earthquakes', 0):,}")
+                st.write(f"• Regions Covered: {data_stats.get('regions_covered', 0)}")
+                st.write(f"• Average Magnitude: {data_stats.get('avg_magnitude', 0):.2f}")
+        
+        # Component status
+        st.markdown("### 🔧 Component Health")
+        
+        system_health = pipeline_status.get('system_health', {})
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            db_connected = system_health.get('database_connected', False)
+            if db_connected:
+                st.success("✅ Database: Connected")
+            else:
+                st.error("❌ Database: Disconnected")
+        
+        with col2:
+            api_operational = system_health.get('api_operational', False)
+            if api_operational:
+                st.success("✅ API: Operational")
+            else:
+                st.error("❌ API: Down")
+        
+        with col3:
+            clustering_completed = data_pipeline.get('clustering_completed', False)
+            if clustering_completed:
+                st.success("✅ Clustering: Complete")
+            else:
+                st.warning("⚠️ Clustering: Pending")
+        
+        # Pipeline recommendations
+        st.markdown("### 💡 Recommendations")
+        
+        recommendations = []
+        
+        if earthquake_count < 1000:
+            recommendations.append("🔄 Run data ingestion pipeline to collect more earthquake data")
+        
+        if clusters == 0:
+            recommendations.append("🔬 Execute DBSCAN clustering pipeline")
+        
+        if models_trained == 0:
+            recommendations.append("🤖 Train ML models for risk zone prediction")
+        
+        if not size_analysis.get('meets_64mb_requirement', True):
+            recommendations.append("📊 Increase data collection to meet 64MB requirement")
+        
+        if not recommendations:
+            st.success("🎉 All systems operational! No actions required.")
+        else:
+            for rec in recommendations:
+                st.info(rec)
+    
     else:
-        st.error("❌ API Status: Offline")
+        st.error("❌ Unable to fetch system status")
+        st.info("Check if the API service is running")
+
+# Sidebar controls
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Pipeline Controls:**")
+if st.sidebar.button("🔄 Refresh Data"):
+    st.rerun()
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #7F8C8D; padding: 1rem;'>
-    <p>🌍 <b>Magnitudr</b> - Earthquake Hazard Detection System</p>
+    <p>🌍 <b>Magnitudr</b> - Hybrid DBSCAN-ML Earthquake Hazard Detection System</p>
+    <p><small>Data Engineering Capstone Project - Real-time Indonesia Seismic Risk Analysis</small></p>
 </div>
 """, unsafe_allow_html=True)

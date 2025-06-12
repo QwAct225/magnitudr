@@ -273,7 +273,7 @@ async def get_clusters(
     """Get DBSCAN clustering results"""
     try:
         query = """
-        SELECT DISTINCT
+        SELECT 
             c.id, c.cluster_id, 
             COALESCE(c.cluster_label, 'Unknown') as cluster_label, 
             COALESCE(c.risk_zone, 'Unknown') as risk_zone,

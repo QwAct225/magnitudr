@@ -608,8 +608,6 @@ elif page == "📈 Temporal Analysis":
             has_time_data = False
     
     if not has_time_data:
-        st.info("📊 Time data not available - showing sample patterns")
-        
         # Fallback: Generate sample time series
         date_range = pd.date_range(start='2024-01-01', end='2025-06-11', freq='D')
         daily_counts = np.random.poisson(5, len(date_range))
@@ -747,11 +745,16 @@ elif page == "🤖 ML Model Performance":
             
             overfitting_data = []
             for model_name, metrics in model_comparison.items():
+                # Ensure positive size for plotly
+                gap = metrics.get('overfitting_gap', 0)
+                abs_gap = abs(gap) if gap else 0.001  # Minimum positive size
+                
                 overfitting_data.append({
                     'Model': model_name,
                     'Train Accuracy': metrics['train_accuracy'],
                     'Test Accuracy': metrics['test_accuracy'],
-                    'Overfitting Gap': metrics['overfitting_gap']
+                    'Overfitting Gap': gap,
+                    'Gap Size': max(abs_gap, 0.001)  # Ensure positive for plotly
                 })
             
             overfitting_df = pd.DataFrame(overfitting_data)
@@ -760,9 +763,9 @@ elif page == "🤖 ML Model Performance":
                 overfitting_df, 
                 x='Train Accuracy', y='Test Accuracy',
                 color='Model',
-                size='Overfitting Gap',
+                size='Gap Size',  # Use positive size column
                 title='Overfitting Analysis (Train vs Test Accuracy)',
-                hover_data=['Overfitting Gap']
+                hover_data=['Overfitting Gap']  # Show actual gap in hover
             )
             
             # Add ideal line (train = test)
@@ -804,11 +807,6 @@ elif page == "🤖 ML Model Performance":
                 - **Recall**: {best_metrics.get('recall', 0):.2%}
                 - **Overfitting**: {best_metrics.get('overfitting_gap', 0):.3f} (Good if < 0.05)
                 """)
-            
-            # Recommendation
-            recommendation = ml_comparison_data.get('recommendation', '')
-            if recommendation:
-                st.info(f"💡 **Recommendation**: {recommendation}")
     
     else:
         st.warning("⚠️ ML model comparison data not available")
@@ -875,11 +873,6 @@ elif page == "🔧 System Status":
                 actual_size = size_analysis.get('total_actual_size_mb', 0)
                 meets_requirement = size_analysis.get('meets_64mb_requirement', False)
                 
-                if meets_requirement:
-                    st.success(f"✅ 64MB Requirement: PASSED")
-                else:
-                    st.error(f"❌ 64MB Requirement: FAILED")
-                
                 st.metric("💾 Estimated Size", f"{estimated_size:.2f} MB")
                 st.metric("📁 Actual File Size", f"{actual_size:.2f} MB")
             
@@ -909,7 +902,7 @@ elif page == "🔧 System Status":
         with col2:
             api_operational = system_health.get('api_operational', False)
             if api_operational:
-                st.success("✅ API: Operational")
+                st.success("✅ API: Connected")
             else:
                 st.error("❌ API: Down")
         

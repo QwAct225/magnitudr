@@ -11,3 +11,4 @@ geopandas==0.14.3
 folium==0.16.0
 great-expectations==0.17.15
 pydantic==2.5.0
+matplotlib

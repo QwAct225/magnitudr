@@ -262,14 +262,29 @@ def train_models_with_comparison(**context):
         joblib.dump(scaler, output_dir / "earthquake_risk_model_scaler.pkl")
         joblib.dump(label_encoder, output_dir / "earthquake_risk_model_label_encoder.pkl")
         
-        # Save comparison results
+        # Convert numpy types to native Python types for JSON serialization
+        def convert_numpy_types(obj):
+            """Convert numpy types to native Python types"""
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {key: convert_numpy_types(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            return obj
+        
+        # Save comparison results with numpy type conversion
         comparison_report = {
             'comparison_timestamp': datetime.now().isoformat(),
-            'model_comparison': model_comparison,
+            'model_comparison': convert_numpy_types(model_comparison),
             'best_model': best_model_name,
-            'class_distribution': class_dist,
-            'feature_count': len(X.columns),
-            'total_predictions_generated': len(predictions),
+            'class_distribution': convert_numpy_types(class_dist),
+            'feature_count': int(len(X.columns)),
+            'total_predictions_generated': int(len(predictions)),
             'recommendation': f"Use {best_model_name} for production predictions"
         }
         
@@ -284,7 +299,7 @@ def train_models_with_comparison(**context):
             'earthquake_id': df_all['id'],
             'predicted_risk_zone': predicted_risk_zones,
             'prediction_confidence': prediction_confidence,
-            'model_version': f"{best_model_name}_v1.0",
+            'model_version': "RF_v1.0" if "RandomForest" in best_model_name else "LR_v1.0",
             'created_at': datetime.now()
         })
         

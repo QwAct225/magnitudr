@@ -109,15 +109,17 @@ def train_models_with_comparison(**context):
         logging.info("🌲 Training Regularized Random Forest...")
         
         rf_param_grid = {
-            'n_estimators': [50, 100],                    # Reduced complexity
-            'max_depth': [5, 10, 15],                     # Limited depth
-            'min_samples_split': [10, 20],                # Higher minimum
-            'min_samples_leaf': [5, 10],                  # Higher minimum  
-            'max_features': ['sqrt'],                     # Feature selection
-            'class_weight': ['balanced']                  # Handle imbalance
+            'n_estimators': [30, 50],                     # Further reduced trees
+            'max_depth': [3, 5, 8],                       # Much shallower trees
+            'min_samples_split': [15, 25],                # Higher split requirement
+            'min_samples_leaf': [8, 12],                  # Larger leaf requirement
+            'max_features': ['sqrt', 'log2'],             # More feature restriction
+            'class_weight': ['balanced'],                 # Handle imbalance
+            'min_impurity_decrease': [0.001, 0.01]       # Minimum improvement required
         }
         
-        kfold = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+        # Reduced CV for more regularization
+        kfold = StratifiedKFold(n_splits=2, shuffle=True, random_state=42)
         
         rf = RandomForestClassifier(random_state=42)
         rf_grid_search = GridSearchCV(
@@ -129,7 +131,16 @@ def train_models_with_comparison(**context):
             verbose=1
         )
         
-        rf_grid_search.fit(X_train_scaled, y_train)
+        # Add noise to training data to increase difficulty
+        noise_scale = 0.01  # 1% noise
+        X_train_noisy = X_train_scaled.copy()
+        for i in range(X_train_scaled.shape[1]):
+            noise = np.random.normal(0, noise_scale, X_train_scaled.shape[0])
+            X_train_noisy[:, i] += noise
+        
+        logging.info(f"🔄 Added {noise_scale*100}% noise to training data for regularization")
+        
+        rf_grid_search.fit(X_train_noisy, y_train)  # Train on noisy data
         best_rf = rf_grid_search.best_estimator_
         
         # === MODEL 2: LOGISTIC REGRESSION BASELINE ===

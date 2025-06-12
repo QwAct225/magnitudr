@@ -105,17 +105,17 @@ def train_models_with_comparison(**context):
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        # REGULARIZED RANDOM FOREST
+        # === MODEL 1: REGULARIZED RANDOM FOREST ===
         logging.info("🌲 Training Regularized Random Forest...")
         
         rf_param_grid = {
-            'n_estimators': [30, 50],
-            'max_depth': [3, 5, 8],
-            'min_samples_split': [15, 25],
-            'min_samples_leaf': [8, 12],
-            'max_features': ['sqrt', 'log2'],
-            'class_weight': ['balanced'],
-            'min_impurity_decrease': [0.001, 0.01]
+            'n_estimators': [30, 50],                     # Further reduced trees
+            'max_depth': [3, 5, 8],                       # Much shallower trees
+            'min_samples_split': [15, 25],                # Higher split requirement
+            'min_samples_leaf': [8, 12],                  # Larger leaf requirement
+            'max_features': ['sqrt', 'log2'],             # More feature restriction
+            'class_weight': ['balanced'],                 # Handle imbalance
+            'min_impurity_decrease': [0.001, 0.01]       # Minimum improvement required
         }
         
         # Reduced CV for more regularization
@@ -143,16 +143,16 @@ def train_models_with_comparison(**context):
         rf_grid_search.fit(X_train_noisy, y_train)  # Train on noisy data
         best_rf = rf_grid_search.best_estimator_
         
-        # REGULARIZED LOGISTIC REGRESSION
+        # === MODEL 2: REGULARIZED LOGISTIC REGRESSION (FAST VERSION) ===
         logging.info("📊 Training Regularized Logistic Regression (Fast)...")
         
         lr_param_grid = {
-            'C': [0.01, 0.1, 1.0],
-            'penalty': ['l1', 'l2'],
-            'solver': ['liblinear'],
-            'class_weight': ['balanced'],
-            'max_iter': [1000],
-            'tol': [1e-4]
+            'C': [0.01, 0.1, 1.0],                       # Strong to moderate regularization
+            'penalty': ['l1', 'l2'],                     # Simple penalties only
+            'solver': ['liblinear'],                     # Fast solver
+            'class_weight': ['balanced'],                # Handle imbalance
+            'max_iter': [1000],                         # Sufficient for liblinear
+            'tol': [1e-4]                               # Single tolerance
         }
         
         lr = LogisticRegression(random_state=42)
@@ -169,7 +169,7 @@ def train_models_with_comparison(**context):
         lr_grid_search.fit(X_train_noisy, y_train)
         best_lr = lr_grid_search.best_estimator_
         
-        # MODEL EVALUATION & COMPARISON
+        # === MODEL EVALUATION & COMPARISON ===
         logging.info("📈 Evaluating and comparing models...")
         
         models = {
@@ -231,8 +231,8 @@ def train_models_with_comparison(**context):
         
         logging.info(f"🏆 Best Model: {best_model_name} (F1: {model_comparison[best_model_name]['f1_score']:.4f})")
         
-        # GENERATE PREDICTIONS FOR ALL DATA
-        logging.info("Generating predictions for all earthquake data...")
+        # === GENERATE PREDICTIONS FOR ALL DATA ===
+        logging.info("🔮 Generating predictions for all earthquake data...")
         
         # Get all processed earthquake data
         all_query = """
@@ -304,14 +304,23 @@ def train_models_with_comparison(**context):
         with open(output_dir / "model_comparison_report.json", 'w') as f:
             json.dump(comparison_report, f, indent=2)
         
-        # STORE PREDICTIONS TO DATABASE
-        logging.info("Storing predictions to database...")
+        # === STORE PREDICTIONS TO DATABASE ===
+        logging.info("💾 Storing predictions to database...")
         
-        # Create predictions DataFrame
+        # Create predictions DataFrame for all earthquake data
         predictions_df = pd.DataFrame({
             'earthquake_id': df_all['id'],
             'predicted_risk_zone': predicted_risk_zones,
             'prediction_confidence': prediction_confidence,
+            'model_version': "RF_v1.0" if "RandomForest" in best_model_name else "LR_v1.0",
+            'created_at': datetime.now()
+        })
+        
+        # Also store cluster predictions for hybrid approach
+        cluster_predictions_df = pd.DataFrame({
+            'earthquake_id': earthquake_ids,
+            'ml_predicted_risk_zone': label_encoder.inverse_transform(best_model.predict(X_train_scaled)),
+            'prediction_confidence': np.max(best_model.predict_proba(X_train_scaled), axis=1),
             'model_version': "RF_v1.0" if "RandomForest" in best_model_name else "LR_v1.0",
             'created_at': datetime.now()
         })
@@ -370,10 +379,10 @@ def train_models_with_comparison(**context):
             }])
             metadata_df.to_sql('ml_model_metadata', engine, if_exists='append', index=False)
         
-        logging.info(f"ML Training with comparison completed successfully")
-        logging.info(f"Best Model: {best_model_name}")
-        logging.info(f"Predictions stored: {len(predictions_df):,}")
-        logging.info(f"Models saved: RandomForest + LogisticRegression + Best")
+        logging.info(f"✅ ML Training with comparison completed successfully")
+        logging.info(f"🏆 Best Model: {best_model_name}")
+        logging.info(f"📊 Predictions stored: {len(predictions_df):,}")
+        logging.info(f"💾 Models saved: RandomForest + LogisticRegression + Best")
         
         return model_comparison[best_model_name]['test_accuracy']
         
@@ -395,7 +404,7 @@ def generate_ml_comparison_visualization(**context):
     from pathlib import Path
     
     try:
-        logging.info("Generating ML model comparison visualization...")
+        logging.info("📊 Generating ML model comparison visualization...")
         
         # Load comparison results
         output_dir = Path("/opt/airflow/magnitudr/data/airflow_output")

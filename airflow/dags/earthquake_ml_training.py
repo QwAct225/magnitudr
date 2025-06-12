@@ -105,17 +105,17 @@ def train_models_with_comparison(**context):
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        # === MODEL 1: REGULARIZED RANDOM FOREST ===
+        # REGULARIZED RANDOM FOREST
         logging.info("🌲 Training Regularized Random Forest...")
         
         rf_param_grid = {
-            'n_estimators': [30, 50],                     # Further reduced trees
-            'max_depth': [3, 5, 8],                       # Much shallower trees
-            'min_samples_split': [15, 25],                # Higher split requirement
-            'min_samples_leaf': [8, 12],                  # Larger leaf requirement
-            'max_features': ['sqrt', 'log2'],             # More feature restriction
-            'class_weight': ['balanced'],                 # Handle imbalance
-            'min_impurity_decrease': [0.001, 0.01]       # Minimum improvement required
+            'n_estimators': [30, 50],
+            'max_depth': [3, 5, 8],
+            'min_samples_split': [15, 25],
+            'min_samples_leaf': [8, 12],
+            'max_features': ['sqrt', 'log2'],
+            'class_weight': ['balanced'],
+            'min_impurity_decrease': [0.001, 0.01]
         }
         
         # Reduced CV for more regularization
@@ -143,15 +143,16 @@ def train_models_with_comparison(**context):
         rf_grid_search.fit(X_train_noisy, y_train)  # Train on noisy data
         best_rf = rf_grid_search.best_estimator_
         
-        # === MODEL 2: LOGISTIC REGRESSION BASELINE ===
-        logging.info("📊 Training Logistic Regression Baseline...")
+        # REGULARIZED LOGISTIC REGRESSION
+        logging.info("📊 Training Regularized Logistic Regression (Fast)...")
         
         lr_param_grid = {
-            'C': [0.1, 1.0, 10.0],                       # Regularization strength
-            'penalty': ['l1', 'l2'],                     # Regularization type
-            'solver': ['liblinear'],                     # Solver for small datasets
-            'class_weight': ['balanced'],                # Handle imbalance
-            'max_iter': [1000]                           # Convergence
+            'C': [0.01, 0.1, 1.0],
+            'penalty': ['l1', 'l2'],
+            'solver': ['liblinear'],
+            'class_weight': ['balanced'],
+            'max_iter': [1000],
+            'tol': [1e-4]
         }
         
         lr = LogisticRegression(random_state=42)
@@ -164,15 +165,16 @@ def train_models_with_comparison(**context):
             verbose=1
         )
         
-        lr_grid_search.fit(X_train_scaled, y_train)
+        # Train LR on same noisy data for fair comparison
+        lr_grid_search.fit(X_train_noisy, y_train)
         best_lr = lr_grid_search.best_estimator_
         
-        # === MODEL EVALUATION & COMPARISON ===
+        # MODEL EVALUATION & COMPARISON
         logging.info("📈 Evaluating and comparing models...")
         
         models = {
-            'RandomForest_Regularized': best_rf,
-            'LogisticRegression_Baseline': best_lr
+            'RandomForest': best_rf,
+            'LogisticRegression': best_lr
         }
         
         model_comparison = {}
@@ -229,8 +231,8 @@ def train_models_with_comparison(**context):
         
         logging.info(f"🏆 Best Model: {best_model_name} (F1: {model_comparison[best_model_name]['f1_score']:.4f})")
         
-        # === GENERATE PREDICTIONS FOR ALL DATA ===
-        logging.info("🔮 Generating predictions for all earthquake data...")
+        # GENERATE PREDICTIONS FOR ALL DATA
+        logging.info("Generating predictions for all earthquake data...")
         
         # Get all processed earthquake data
         all_query = """
@@ -266,7 +268,7 @@ def train_models_with_comparison(**context):
         output_dir = Path("/opt/airflow/magnitudr/data/airflow_output")
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save models
+        # Save models with neutral names
         joblib.dump(best_rf, output_dir / "earthquake_risk_model_randomforest.pkl")
         joblib.dump(best_lr, output_dir / "earthquake_risk_model_logistic.pkl")
         joblib.dump(best_model, output_dir / "earthquake_risk_model_best.pkl")
@@ -302,8 +304,8 @@ def train_models_with_comparison(**context):
         with open(output_dir / "model_comparison_report.json", 'w') as f:
             json.dump(comparison_report, f, indent=2)
         
-        # === STORE PREDICTIONS TO DATABASE ===
-        logging.info("💾 Storing predictions to database...")
+        # STORE PREDICTIONS TO DATABASE
+        logging.info("Storing predictions to database...")
         
         # Create predictions DataFrame
         predictions_df = pd.DataFrame({
@@ -368,10 +370,10 @@ def train_models_with_comparison(**context):
             }])
             metadata_df.to_sql('ml_model_metadata', engine, if_exists='append', index=False)
         
-        logging.info(f"✅ ML Training with comparison completed successfully")
-        logging.info(f"🏆 Best Model: {best_model_name}")
-        logging.info(f"📊 Predictions stored: {len(predictions_df):,}")
-        logging.info(f"💾 Models saved: RandomForest + LogisticRegression + Best")
+        logging.info(f"ML Training with comparison completed successfully")
+        logging.info(f"Best Model: {best_model_name}")
+        logging.info(f"Predictions stored: {len(predictions_df):,}")
+        logging.info(f"Models saved: RandomForest + LogisticRegression + Best")
         
         return model_comparison[best_model_name]['test_accuracy']
         
@@ -393,7 +395,7 @@ def generate_ml_comparison_visualization(**context):
     from pathlib import Path
     
     try:
-        logging.info("📊 Generating ML model comparison visualization...")
+        logging.info("Generating ML model comparison visualization...")
         
         # Load comparison results
         output_dir = Path("/opt/airflow/magnitudr/data/airflow_output")
@@ -407,7 +409,7 @@ def generate_ml_comparison_visualization(**context):
         metrics = ['test_accuracy', 'precision', 'recall', 'f1_score']
         
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        fig.suptitle('ML Model Comparison: RandomForest vs LogisticRegression', fontsize=16)
+        fig.suptitle('ML Model Comparison: RandomForest vs LogisticRegression (Both Regularized)', fontsize=16)
         
         for i, metric in enumerate(metrics):
             ax = axes[i//2, i%2]
@@ -434,22 +436,23 @@ def generate_ml_comparison_visualization(**context):
         
         # Create summary table
         summary_text = f"""
-        🤖 ML MODEL COMPARISON SUMMARY
-        ================================
+        🤖 ML MODEL COMPARISON SUMMARY (BOTH REGULARIZED)
+        ================================================
         
         Best Model: {comparison_data['best_model']}
         Total Predictions: {comparison_data['total_predictions_generated']:,}
         
         RandomForest Performance:
-        - Accuracy: {model_comparison['RandomForest_Regularized']['test_accuracy']:.4f}
-        - F1-Score: {model_comparison['RandomForest_Regularized']['f1_score']:.4f}
-        - Overfitting: {model_comparison['RandomForest_Regularized']['overfitting_gap']:.4f}
+        - Accuracy: {model_comparison['RandomForest']['test_accuracy']:.4f}
+        - F1-Score: {model_comparison['RandomForest']['f1_score']:.4f}
+        - Overfitting: {model_comparison['RandomForest']['overfitting_gap']:.4f}
         
         LogisticRegression Performance:
-        - Accuracy: {model_comparison['LogisticRegression_Baseline']['test_accuracy']:.4f}
-        - F1-Score: {model_comparison['LogisticRegression_Baseline']['f1_score']:.4f}
-        - Overfitting: {model_comparison['LogisticRegression_Baseline']['overfitting_gap']:.4f}
+        - Accuracy: {model_comparison['LogisticRegression']['test_accuracy']:.4f}
+        - F1-Score: {model_comparison['LogisticRegression']['f1_score']:.4f}
+        - Overfitting: {model_comparison['LogisticRegression']['overfitting_gap']:.4f}
         
+        Note: Both models use aggressive regularization for fair comparison
         Recommendation: {comparison_data['recommendation']}
         """
         

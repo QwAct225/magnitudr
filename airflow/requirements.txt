@@ -3,12 +3,13 @@ pandas==2.2.3
 numpy==1.26.4
 requests==2.32.3
 psycopg2-binary==2.9.10
-sqlalchemy==2.0.40
+sqlalchemy==1.4.39
 scikit-learn==1.4.2
 python-dotenv==1.1.0
 dvc[gs]==3.50.0
 geopandas==0.14.3
 folium==0.16.0
-great-expectations==0.17.15
+great-expectations==0.18.8
 pydantic==2.5.0
-matplotlib
+matplotlib==3.8.2
+pyspark==3.4.0

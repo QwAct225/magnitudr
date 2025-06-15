@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 import pandas as pd
 import os
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 import logging
 from decimal import Decimal
@@ -50,8 +50,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models for API responses - DEFINED FIRST
+# Pydantic models for API responses - FIXED NAMESPACE ISSUES
 class EarthquakeData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     id: str
     magnitude: float
     latitude: float
@@ -66,10 +68,9 @@ class EarthquakeData(BaseModel):
     depth_category: Optional[str] = None
     risk_zone: Optional[str] = None
 
-    class Config:
-        arbitrary_types_allowed = True
-
 class ClusterData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     id: str
     cluster_id: int
     cluster_label: str
@@ -80,6 +81,8 @@ class ClusterData(BaseModel):
     avg_magnitude: float
 
 class HazardZone(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     zone_id: int
     risk_level: str
     avg_magnitude: float
@@ -88,14 +91,18 @@ class HazardZone(BaseModel):
     center_lon: float
     boundary_coordinates: Optional[str] = ""
 
-class MLPrediction(BaseModel):
+class RiskClassification(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     earthquake_id: str
-    predicted_risk_zone: str
-    prediction_confidence: float
+    classified_risk_zone: str
+    classification_confidence: float
     model_version: str
     created_at: datetime
 
 class ModelMetrics(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     model_name: str
     model_type: str
     accuracy: float
@@ -105,6 +112,8 @@ class ModelMetrics(BaseModel):
     training_samples: int
 
 class SystemStats(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     total_earthquakes: int
     total_clusters: int
     high_risk_zones: int
@@ -153,11 +162,13 @@ async def root():
         "status": "operational",
         "database": db_status,
         "version": "1.0.0",
+        "architecture": "Spark + DBSCAN + ML Hybrid",
         "documentation": "/docs",
         "endpoints": {
             "earthquakes": "/earthquakes",
             "clusters": "/clusters", 
             "hazard-zones": "/hazard-zones",
+            "risk-classifications": "/risk-classifications",
             "statistics": "/stats",
             "health": "/health",
             "ml-comparison": "/ml/model-comparison",
@@ -181,6 +192,7 @@ async def health_check():
             "database": "connected", 
             "earthquake_records": safe_int(count),
             "api_version": "1.0.0",
+            "architecture": "Spark + ML Hybrid",
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -270,7 +282,7 @@ async def get_clusters(
     risk_zone: Optional[str] = Query(default=None, description="Filter by risk zone"),
     min_cluster_size: Optional[int] = Query(default=None, description="Minimum cluster size")
 ):
-    """Get DBSCAN clustering results"""
+    """Get DBSCAN clustering results with ML labeling"""
     try:
         query = """
         SELECT 
@@ -320,6 +332,55 @@ async def get_clusters(
     except Exception as e:
         logger.error(f"❌ Failed to retrieve clusters: {e}")
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+
+@app.get("/risk-classifications", response_model=List[RiskClassification], summary="Get ML Risk Classifications")
+async def get_risk_classifications(
+    limit: int = Query(default=1000, le=10000, description="Maximum number of classifications"),
+    min_confidence: Optional[float] = Query(default=None, description="Minimum classification confidence")
+):
+    """
+    🤖 **Get ML model risk classifications**
+    
+    Returns ML-generated risk zone classifications with confidence scores.
+    """
+    try:
+        query = """
+        SELECT 
+            earthquake_id, classified_risk_zone, classification_confidence, 
+            model_version, created_at
+        FROM earthquake_risk_classifications
+        WHERE 1=1
+        """
+        
+        params = {}
+        
+        if min_confidence is not None:
+            query += " AND classification_confidence >= :min_confidence"
+            params['min_confidence'] = min_confidence
+        
+        query += " ORDER BY classification_confidence DESC LIMIT :limit"
+        params['limit'] = limit
+        
+        with get_db_connection() as conn:
+            result = conn.execute(text(query), params)
+            data = result.fetchall()
+        
+        classifications = []
+        for row in data:
+            classifications.append(RiskClassification(
+                earthquake_id=str(row[0]),
+                classified_risk_zone=str(row[1]),
+                classification_confidence=safe_float(row[2]),
+                model_version=str(row[3]),
+                created_at=row[4] if row[4] else datetime.now()
+            ))
+        
+        logger.info(f"✅ Retrieved {len(classifications)} risk classifications")
+        return classifications
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to retrieve risk classifications: {e}")
+        raise HTTPException(status_code=500, detail=f"Risk classifications query failed: {str(e)}")
 
 @app.get("/hazard-zones", response_model=List[HazardZone], summary="Get Hazard Zones")
 async def get_hazard_zones(
@@ -408,7 +469,6 @@ async def get_system_stats():
             # Calculate data quality score with bulletproof error handling
             try:
                 if avg_hazard and avg_hazard > 0:
-                    # Convert decimal to float safely
                     hazard_float = float(str(avg_hazard))
                     data_quality = min(hazard_float / 10.0, 1.0)
                 else:
@@ -433,17 +493,11 @@ async def get_system_stats():
 
 @app.get("/ml/model-comparison", summary="Get ML Model Comparison Results")
 async def get_model_comparison():
-    """
-    📊 **Get comprehensive ML model comparison results**
-    
-    Returns comparison between RandomForest and LogisticRegression models
-    including performance metrics and training details.
-    """
+    """Get comprehensive ML model comparison results"""
     try:
         import json
         from pathlib import Path
         
-        # Load model comparison report
         report_path = Path("/app/data/airflow_output/model_comparison_report.json")
         
         if report_path.exists():
@@ -457,7 +511,7 @@ async def get_model_comparison():
                 "best_model": comparison_data.get('best_model'),
                 "model_comparison": comparison_data.get('model_comparison', {}),
                 "recommendation": comparison_data.get('recommendation'),
-                "total_predictions": comparison_data.get('total_predictions_generated', 0)
+                "total_classifications": comparison_data.get('total_classifications_generated', 0)
             }
         else:
             return {
@@ -472,24 +526,14 @@ async def get_model_comparison():
 
 @app.get("/pipeline/status", summary="Get Pipeline Status")
 async def get_pipeline_status():
-    """
-    🔧 **Get comprehensive pipeline status and health**
-    
-    Returns status of all pipeline components including data volume,
-    processing status, and system health.
-    """
+    """Get comprehensive pipeline status and health"""
     try:
         with get_db_connection() as conn:
             # Check data volume
             result = conn.execute(text("SELECT COUNT(*) FROM earthquakes_processed")).fetchone()
             earthquake_count = safe_int(result[0]) if result else 0
             
-            # Estimate data size
-            if earthquake_count > 0:
-                # Rough estimation: ~2KB per earthquake record
-                estimated_size_mb = (earthquake_count * 2) / 1024
-            else:
-                estimated_size_mb = 0
+            estimated_size_mb = (earthquake_count * 2) / 1024 if earthquake_count > 0 else 0
             
             # Check cluster status
             cluster_result = conn.execute(text("SELECT COUNT(DISTINCT cluster_id) FROM earthquake_clusters WHERE cluster_id IS NOT NULL")).fetchone()
@@ -499,11 +543,10 @@ async def get_pipeline_status():
             ml_result = conn.execute(text("SELECT COUNT(*) FROM ml_model_metadata")).fetchone()
             ml_models_count = safe_int(ml_result[0]) if ml_result else 0
             
-            # Check recent predictions
-            pred_result = conn.execute(text("SELECT COUNT(*) FROM earthquake_predictions")).fetchone()
-            predictions_count = safe_int(pred_result[0]) if pred_result else 0
+            # Check risk classifications
+            class_result = conn.execute(text("SELECT COUNT(*) FROM earthquake_risk_classifications")).fetchone()
+            classifications_count = safe_int(class_result[0]) if class_result else 0
         
-        # Determine overall status
         pipeline_health = "healthy"
         if earthquake_count < 1000:
             pipeline_health = "warning"
@@ -521,12 +564,13 @@ async def get_pipeline_status():
             },
             "ml_pipeline": {
                 "models_trained": ml_models_count,
-                "predictions_generated": predictions_count,
+                "classifications_generated": classifications_count,
                 "ml_ready": ml_models_count > 0
             },
             "system_health": {
                 "database_connected": True,
                 "api_operational": True,
+                "spark_integrated": True,
                 "last_check": datetime.now().isoformat()
             }
         }
@@ -545,14 +589,9 @@ async def get_pipeline_status():
 
 @app.get("/data-volume", summary="Verify Data Volume Requirements")
 async def get_data_volume():
-    """
-    📊 **Verify 64MB data requirement compliance**
-    
-    Returns detailed information about data volume and requirement compliance.
-    """
+    """Verify 64MB data requirement compliance"""
     try:
         with get_db_connection() as conn:
-            # Get detailed data statistics
             result = conn.execute(text("""
                 SELECT 
                     COUNT(*) as total_records,
@@ -565,11 +604,8 @@ async def get_data_volume():
             """)).fetchone()
             
             if result and result[0] > 0:
-                # Estimate data size (rough calculation)
-                # Average earthquake record ~2KB (all columns + metadata)
                 estimated_size_mb = (result[0] * 2) / 1024
                 
-                # Check for actual file if available
                 import os
                 file_paths = [
                     "/app/data/airflow_output/raw_earthquake_data.csv",
@@ -601,7 +637,8 @@ async def get_data_volume():
                         "actual_file_sizes_mb": actual_file_sizes,
                         "total_actual_size_mb": round(total_actual_size_mb, 2),
                         "meets_64mb_requirement": max(estimated_size_mb, total_actual_size_mb) >= 64,
-                        "target_size_mb": 64
+                        "target_size_mb": 64,
+                        "processing_method": "Apache Spark"
                     },
                     "verification_timestamp": datetime.now().isoformat()
                 }

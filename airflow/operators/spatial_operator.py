@@ -6,7 +6,8 @@ from sklearn.preprocessing import StandardScaler
 import logging
 import os
 import great_expectations as gx
-from great_expectations.core import ExpectationSuite, ExpectationConfiguration
+from great_expectations.core import ExpectationSuite
+from great_expectations.expectations.expectation import ExpectationConfiguration
 
 class SpatialDensityOperator(BaseOperator):
     """

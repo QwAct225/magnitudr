@@ -2,7 +2,7 @@ FROM apache/airflow:2.8.0-python3.11
 
 USER root
 
-# Install system dependencies including Java for Spark
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -17,7 +17,7 @@ ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 ENV PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.9-src.zip:$PYTHONPATH
 
-# Download and install Spark
+# Install Spark
 RUN curl -L https://archive.apache.org/dist/spark/spark-3.4.0/spark-3.4.0-bin-hadoop3.tgz -o spark.tgz \
     && tar -xzf spark.tgz \
     && mv spark-3.4.0-bin-hadoop3 /opt/spark \
@@ -26,11 +26,12 @@ RUN curl -L https://archive.apache.org/dist/spark/spark-3.4.0/spark-3.4.0-bin-ha
 
 USER airflow
 
-# Install Python dependencies
+# Copy and install requirements first
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install seaborn matplotlib great-expectations==0.17.19 scikit-learn
 
-# Copy project files
+# Copy project files after dependencies are installed
 COPY operators /opt/airflow/operators
 COPY utils /opt/airflow/utils
 COPY dags /opt/airflow/dags

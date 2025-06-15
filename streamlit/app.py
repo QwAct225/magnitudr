@@ -12,7 +12,7 @@ import time
 
 # Page configuration
 st.set_page_config(
-    page_title="🌍 Magnitudr - Earthquake Hazard Detection",
+    page_title="Magnitudr - Earthquake Hazard Detection",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded"

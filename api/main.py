@@ -158,7 +158,7 @@ async def root():
     db_status = "connected" if engine else "disconnected"
     
     return {
-        "message": "🌍 Magnitudr Earthquake Analysis API",
+        "message": "Magnitudr Earthquake Analysis API",
         "status": "operational",
         "database": db_status,
         "version": "1.0.0",

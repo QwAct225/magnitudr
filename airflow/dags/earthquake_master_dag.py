@@ -54,7 +54,7 @@ def run_spark_usgs_ingestion(**context):
 
 def run_spatial_processing(**context):
     """Step 2: Spatial Processing and Feature Engineering"""
-    logging.info("í´„ Starting spatial processing...")
+    logging.info("Starting spatial processing...")
     
     try:
         from spatial_operator import SpatialDensityOperator

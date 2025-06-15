@@ -22,39 +22,39 @@ default_args = {
 dag = DAG(
     'earthquake_master_pipeline',
     default_args=default_args,
-    description='🌍 Master earthquake analysis pipeline with ML - production ready',
+    description='🌍 Master earthquake analysis pipeline with Spark integration - production ready',
     schedule_interval='0 19 * * *',  # Daily at 02:00 WIB (19:00 UTC) - Best practice
     max_active_runs=1,
-    tags=['earthquake', 'master', 'production', 'ml']
+    tags=['earthquake', 'master', 'production', 'spark']
 )
 
-def run_usgs_ingestion(**context):
-    """Step 1: USGS Data Ingestion"""
-    logging.info("🌍 Starting USGS data ingestion...")
+def run_spark_usgs_ingestion(**context):
+    """Step 1: Spark-Enhanced USGS Data Ingestion"""
+    logging.info("🌍 Starting Spark-enhanced USGS data ingestion...")
     
     try:
-        from usgs_operator import USGSDataOperator
+        from spark_usgs_operator import SparkUSGSDataOperator
         
-        usgs_operator = USGSDataOperator(
-            task_id='usgs_ingestion',
+        spark_usgs_operator = SparkUSGSDataOperator(
+            task_id='spark_usgs_ingestion',
             output_path='/opt/airflow/magnitudr/data/airflow_output/raw_earthquake_data.csv',
-            start_year=2014,
+            start_year=2016,
             min_magnitude=1.0,
             target_size_mb=64.0,
             strict_validation=False
         )
         
-        result = usgs_operator.execute(context)
-        logging.info(f"✅ USGS ingestion completed: {result} records")
+        result = spark_usgs_operator.execute(context)
+        logging.info(f"✅ Spark USGS ingestion completed: {result} records")
         return result
         
     except Exception as e:
-        logging.error(f"❌ USGS ingestion failed: {e}")
+        logging.error(f"❌ Spark USGS ingestion failed: {e}")
         raise
 
 def run_spatial_processing(**context):
     """Step 2: Spatial Processing and Feature Engineering"""
-    logging.info("🔄 Starting spatial processing...")
+    logging.info("��� Starting spatial processing...")
     
     try:
         from spatial_operator import SpatialDensityOperator
@@ -63,7 +63,8 @@ def run_spatial_processing(**context):
             task_id='spatial_processing',
             input_path='/opt/airflow/magnitudr/data/airflow_output/raw_earthquake_data.csv',
             output_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
-            grid_size=0.1
+            grid_size=0.1,
+            enable_validation=True
         )
         
         result = spatial_operator.execute(context)
@@ -120,15 +121,15 @@ def load_to_database(**context):
         logging.error(f"❌ Database loading failed: {e}")
         raise
 
-def run_dbscan_clustering(**context):
-    """Step 4: DBSCAN Clustering Analysis"""
-    logging.info("🔬 Starting DBSCAN clustering...")
+def run_hybrid_dbscan_clustering(**context):
+    """Step 4: Hybrid DBSCAN Clustering with ML Labeling"""
+    logging.info("🔬 Starting Hybrid DBSCAN clustering with ML labeling...")
     
     try:
         from dbscan_operator import DBSCANClusterOperator
         
         dbscan_operator = DBSCANClusterOperator(
-            task_id='dbscan_clustering',
+            task_id='hybrid_dbscan_clustering',
             input_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
             db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
             eps=0.1,
@@ -136,11 +137,11 @@ def run_dbscan_clustering(**context):
         )
         
         result = dbscan_operator.execute(context)
-        logging.info(f"✅ DBSCAN clustering completed: {result} clusters")
+        logging.info(f"✅ Hybrid DBSCAN clustering completed: {result} clusters with ML labeling")
         return result
         
     except Exception as e:
-        logging.error(f"❌ DBSCAN clustering failed: {e}")
+        logging.error(f"❌ Hybrid DBSCAN clustering failed: {e}")
         raise
 
 def run_data_visualization(**context):
@@ -176,20 +177,20 @@ def run_data_visualization(**context):
         # 1. Magnitude distribution
         plt.figure(figsize=(10, 6))
         plt.hist(df_earthquakes['magnitude'], bins=30, alpha=0.7, color='orange')
-        plt.title('Earthquake Magnitude Distribution', fontsize=14)
+        plt.title('Earthquake Magnitude Distribution (Spark-Processed)', fontsize=14)
         plt.xlabel('Magnitude')
         plt.ylabel('Frequency')
         plt.tight_layout()
         plt.savefig(f'{viz_dir}/magnitude_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 2. Risk zone distribution
+        # 2. Risk zone distribution (ML-labeled)
         if not df_clusters.empty:
             plt.figure(figsize=(8, 6))
             risk_counts = df_clusters['risk_zone'].value_counts()
             colors = ['#E74C3C', '#FF6B35', '#F39C12', '#27AE60']
             plt.pie(risk_counts.values, labels=risk_counts.index, autopct='%1.1f%%', colors=colors)
-            plt.title('Risk Zone Distribution', fontsize=14)
+            plt.title('Risk Zone Distribution (ML-Labeled)', fontsize=14)
             plt.tight_layout()
             plt.savefig(f'{viz_dir}/risk_zone_distribution.png', dpi=300, bbox_inches='tight')
             plt.close()
@@ -199,7 +200,7 @@ def run_data_visualization(**context):
         scatter = plt.scatter(df_earthquakes['longitude'], df_earthquakes['latitude'], 
                             c=df_earthquakes['magnitude'], cmap='Reds', alpha=0.6)
         plt.colorbar(scatter, label='Magnitude')
-        plt.title('Earthquake Geographic Distribution', fontsize=14)
+        plt.title('Earthquake Geographic Distribution (Spark+ML Pipeline)', fontsize=14)
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
         plt.tight_layout()
@@ -215,6 +216,7 @@ def run_data_visualization(**context):
             'earthquake_samples': len(df_earthquakes),
             'cluster_samples': len(df_clusters),
             'output_directory': viz_dir,
+            'processing_method': 'Spark + ML Hybrid',
             'plots': [
                 'magnitude_distribution.png',
                 'risk_zone_distribution.png', 
@@ -234,7 +236,7 @@ def run_data_visualization(**context):
         raise
 
 def generate_master_report(**context):
-    """Step 6: Generate master pipeline report with ML metrics"""
+    """Step 6: Generate master pipeline report with Spark and ML integration"""
     logging.info("📋 Generating master pipeline report...")
     
     try:
@@ -265,48 +267,59 @@ def generate_master_report(**context):
         """)
         risk_distribution = dict(cursor.fetchall())
         
+        # Check for ML model availability
+        cursor.execute("SELECT COUNT(*) FROM ml_model_metadata")
+        ml_models_trained = cursor.fetchone()[0]
+        
         cursor.close()
         conn.close()
         
         # Get ML model metrics if available
         try:
-            metrics_path = '/opt/airflow/magnitudr/data/airflow_output/earthquake_risk_model_metrics.json'
+            metrics_path = '/opt/airflow/magnitudr/data/airflow_output/model_comparison_report.json'
             if os.path.exists(metrics_path):
                 with open(metrics_path, 'r') as f:
                     ml_metrics = json.load(f)
+                best_model = ml_metrics.get('best_model', 'Unknown')
+                best_model_metrics = ml_metrics.get('model_comparison', {}).get(best_model, {})
                 report_ml_metrics = {
-                    'accuracy': ml_metrics.get('accuracy', 0),
-                    'f1_score': ml_metrics.get('f1_score', 0),
-                    'precision': ml_metrics.get('precision', 0),
-                    'recall': ml_metrics.get('recall', 0)
+                    'best_model': best_model,
+                    'accuracy': best_model_metrics.get('test_accuracy', 0),
+                    'f1_score': best_model_metrics.get('f1_score', 0),
+                    'precision': best_model_metrics.get('precision', 0),
+                    'recall': best_model_metrics.get('recall', 0),
+                    'models_trained': ml_models_trained
                 }
             else:
-                report_ml_metrics = {'status': 'model_not_found'}
+                report_ml_metrics = {'status': 'model_not_found', 'models_trained': ml_models_trained}
         except Exception as e:
             report_ml_metrics = {'status': 'error', 'message': str(e)}
         
         report = {
-            'pipeline_name': 'Magnitudr Master Production Pipeline with ML',
+            'pipeline_name': 'Magnitudr Master Production Pipeline with Spark + ML',
             'execution_timestamp': datetime.now().isoformat(),
             'status': 'SUCCESS',
             'schedule': 'Daily at 02:00 WIB',
+            'architecture': 'Hybrid Spark + DBSCAN + ML',
             'data_statistics': {
                 'total_earthquakes': total_earthquakes,
                 'total_clusters': total_clusters,
                 'high_risk_zones': high_risk_zones,
                 'risk_distribution': risk_distribution,
-                'data_coverage': '2014-2025 (11 years)'
+                'data_coverage': '2016-2025 (9 years)',
+                'processing_method': 'Apache Spark + ML Classification'
             },
             'ml_model_performance': report_ml_metrics,
             'system_endpoints': {
                 'api_docs': 'http://localhost:8000/docs',
                 'api_health': 'http://localhost:8000/health',
-                'ml_predictions': 'http://localhost:8000/ml/predictions',
-                'ml_metrics': 'http://localhost:8000/ml/model-metrics',
+                'ml_comparison': 'http://localhost:8000/ml/model-comparison',
+                'pipeline_status': 'http://localhost:8000/pipeline/status',
                 'dashboard': 'http://localhost:8501',
                 'airflow': 'http://localhost:8080'
             },
-            'production_ready': True
+            'production_ready': True,
+            'data_volume_compliant': total_earthquakes > 10000  # Estimate compliance
         }
         
         report_path = Path("/opt/airflow/magnitudr/data/airflow_output/master_pipeline_report.json")
@@ -315,13 +328,14 @@ def generate_master_report(**context):
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2)
         
-        logging.info(f"🎉 MASTER PIPELINE WITH ML COMPLETED!")
+        logging.info(f"🎉 MASTER PIPELINE WITH SPARK + ML COMPLETED!")
         logging.info(f"📊 Earthquakes: {total_earthquakes:,}")
         logging.info(f"🔬 Clusters: {total_clusters}")
         logging.info(f"🚨 High-risk zones: {high_risk_zones}")
-        logging.info(f"🤖 ML Model: {report_ml_metrics.get('status', 'Available')}")
+        logging.info(f"🚀 Processed with: Apache Spark")
+        logging.info(f"🤖 ML Models: {ml_models_trained} trained")
         logging.info(f"🎯 Dashboard: http://localhost:8501")
-        logging.info(f"🤖 ML API: http://localhost:8000/ml/predictions")
+        logging.info(f"🤖 ML API: http://localhost:8000/ml/model-comparison")
         
         return str(report_path)
         
@@ -330,9 +344,9 @@ def generate_master_report(**context):
         raise
 
 # Define tasks
-task_ingestion = PythonOperator(
-    task_id='usgs_data_ingestion',
-    python_callable=run_usgs_ingestion,
+task_spark_ingestion = PythonOperator(
+    task_id='spark_usgs_data_ingestion',
+    python_callable=run_spark_usgs_ingestion,
     dag=dag
 )
 
@@ -349,8 +363,8 @@ task_database = PythonOperator(
 )
 
 task_clustering = PythonOperator(
-    task_id='dbscan_clustering',
-    python_callable=run_dbscan_clustering,
+    task_id='hybrid_dbscan_clustering',
+    python_callable=run_hybrid_dbscan_clustering,
     dag=dag
 )
 
@@ -366,5 +380,5 @@ task_report = PythonOperator(
     dag=dag
 )
 
-# Daily production pipeline flow (without ML)
-task_ingestion >> task_processing >> task_database >> task_clustering >> task_visualization >> task_report
+# Enhanced pipeline flow with Spark integration
+task_spark_ingestion >> task_processing >> task_database >> task_clustering >> task_visualization >> task_report

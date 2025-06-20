@@ -4,6 +4,7 @@ services:
   postgres:
     image: postgis/postgis:15-3.3
     container_name: magnitudr_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: magnitudr
       POSTGRES_USER: postgres
@@ -25,6 +26,7 @@ services:
   airflow:
     build: ./airflow
     container_name: magnitudr_airflow
+    restart: unless-stopped
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:earthquake123@postgres:5432/magnitudr
@@ -68,6 +70,7 @@ services:
   api:
     build: ./api
     container_name: magnitudr_api
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:earthquake123@postgres:5432/magnitudr
     ports:
@@ -82,6 +85,7 @@ services:
   streamlit:
     build: ./streamlit
     container_name: magnitudr_streamlit
+    restart: unless-stopped
     environment:
       - API_BASE_URL=http://api:8000
     ports:

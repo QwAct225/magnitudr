@@ -33,8 +33,11 @@ task_dbscan = DBSCANClusterOperator(
     task_id='run_dbscan_clustering',
     input_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
     db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
-    eps=0.1,            # 0.1 degree radius (~11km)
-    min_samples=5,      # Minimum 5 events per cluster
+    model_path='/opt/airflow/magnitudr/data/models/earthquake_model.pkl',
+    scaler_path='/opt/airflow/magnitudr/data/models/earthquake_model_scaler.pkl',
+    label_encoder_path='/opt/airflow/magnitudr/data/models/earthquake_model_label_encoder.pkl',
+    eps=0.1,
+    min_samples=5,
     dag=dag
 )
 

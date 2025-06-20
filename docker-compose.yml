@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: magnitudr_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: magnitudr
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: earthquake123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - magnitudr_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  airflow:
+    build: ./airflow
+    container_name: magnitudr_airflow
+    restart: unless-stopped
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:earthquake123@postgres:5432/magnitudr
+      - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSHMpQfGjO_wfRcEoOIaTZxPqHFE=
+      - AIRFLOW__WEBSERVER__SECRET_KEY=earthquake_secret_key_2025
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=false
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=30
+      - AIRFLOW__SCHEDULER__CATCHUP_BY_DEFAULT=false
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+      - AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT=60
+      - MAGNITUDR_PROJECT_PATH=/opt/airflow/magnitudr
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/magnitudr/my-dvc-credential.json
+    ports:
+      - "8080:8080"
+    volumes:
+      # Project root mount (includes DVC context)
+      - .:/opt/airflow/magnitudr
+      
+      # Airflow specific mounts
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/operators:/opt/airflow/operators
+      - ./airflow/utils:/opt/airflow/utils
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - magnitudr_network
+    command: >
+      bash -c "
+        echo 'Initializing Airflow...' &&
+        cd /opt/airflow/magnitudr &&
+        airflow db init &&
+        echo 'Creating admin user...' &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@magnitudr.com &&
+        echo 'Starting Airflow services...' &&
+        airflow scheduler &
+        airflow webserver --port 8080
+      "
+
+  api:
+    build: ./api
+    container_name: magnitudr_api
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:earthquake123@postgres:5432/magnitudr
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    networks:
+      - magnitudr_network
+    volumes:
+      - ./data:/app/data
+
+  streamlit:
+    build: ./streamlit
+    container_name: magnitudr_streamlit
+    restart: unless-stopped
+    environment:
+      - API_BASE_URL=http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    networks:
+      - magnitudr_network
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  postgres_data:
+
+networks:
+  magnitudr_network:
+    driver: bridge

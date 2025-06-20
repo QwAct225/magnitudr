@@ -177,10 +177,13 @@ class SparkUSGSDataOperator(BaseOperator):
             StructField("longitude", DoubleType(), True),
             StructField("depth", DoubleType(), True),
             StructField("magnitude", DoubleType(), True),
-            StructField("magType", StringType(), True),
+            StructField("magnitude_type", StringType(), True),
             StructField("place", StringType(), True),
-            StructField("type", StringType(), True),
-            StructField("status", StringType(), True),
+            StructField("significance", IntegerType(), True),
+            StructField("alert", StringType(), True),
+            StructField("tsunami", IntegerType(), True),
+            StructField("year", IntegerType(), True),
+            StructField("extraction_timestamp", TimestampType(), True),
             StructField("data_source", StringType(), True)
         ])
 
@@ -192,6 +195,9 @@ class SparkUSGSDataOperator(BaseOperator):
                 time_ms = record.get('time', 0)
                 time = datetime.fromtimestamp(time_ms / 1000.0) if time_ms else None
 
+                # Convert extraction timestamp string to datetime if it exists
+                extraction_ts = datetime.fromisoformat(record['extraction_timestamp']) if record.get('extraction_timestamp') else datetime.now()
+
                 processed_record = {
                     "id": str(record.get('id', '')),
                     "time": time,
@@ -199,11 +205,14 @@ class SparkUSGSDataOperator(BaseOperator):
                     "longitude": float(record.get('longitude', 0.0)),
                     "depth": float(record.get('depth', 0.0)),
                     "magnitude": float(record.get('magnitude', 0.0)),
-                    "magType": str(record.get('magType', '')),
+                    "magnitude_type": str(record.get('magnitude_type', '')),
                     "place": str(record.get('place', '')),
-                    "type": str(record.get('type', '')),
-                    "status": str(record.get('status', '')),
-                    "data_source": "USGS_API"
+                    "significance": int(record.get('significance', 0)),
+                    "alert": str(record.get('alert', '')),
+                    "tsunami": int(record.get('tsunami', 0)),
+                    "year": int(record.get('year', 0)),
+                    "extraction_timestamp": extraction_ts,
+                    "data_source": str(record.get('data_source', 'USGS_API'))
                 }
                 processed_data.append(processed_record)
             except (ValueError, TypeError) as e:

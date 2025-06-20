@@ -5,9 +5,8 @@ import sys
 import os
 
 # Add custom operators to path
-sys.path.append('/opt/airflow/operators')
-sys.path.append('/opt/airflow/utils')
-from dbscan_operator import DBSCANClusterOperator
+sys.path.append('/opt/airflow')
+from operators.dbscan_operator import DBSCANClusterOperator
 
 default_args = {
     'owner': 'magnitudr-team',

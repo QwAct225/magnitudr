@@ -8,6 +8,9 @@ import psycopg2
 from sqlalchemy import create_engine, text
 import joblib
 import logging
+from operators.ml_classification_operator import EarthquakeMLClassificationOperator
+
+
 import os
 from pathlib import Path
 
@@ -15,21 +18,26 @@ class DBSCANClusterOperator(BaseOperator):
     """
     Hybrid DBSCAN operator - clustering with ML-based risk zone labeling
     """
-    
+
     @apply_defaults
     def __init__(
-        self,
-        input_path: str,
-        db_connection: str,
-        eps: float = 0.1,
-        min_samples: int = 5,
-        *args, **kwargs
+            self,
+            input_path: str,
+            db_connection: str,
+            eps: float = 0.1,
+            min_samples: int = 5,
+            *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.input_path = input_path
         self.db_connection = db_connection
         self.eps = eps
         self.min_samples = min_samples
+        self.classifier = EarthquakeMLClassificationOperator(
+            task_id='ml_classifier_for_dbscan',
+            db_connection=self.db_connection,
+            model_output_path='/opt/airflow/magnitudr/data/models/earthquake_model.pkl'
+        )
     
     def execute(self, context):
         logging.info("🔬 Starting Hybrid DBSCAN clustering with ML labeling...")
@@ -179,78 +187,54 @@ class DBSCANClusterOperator(BaseOperator):
             return 'Moderate'
         else:
             return 'Low'
-    
+
     def _store_clustering_results(self, df, cluster_analysis):
-        """Store ONLY clustering results, no earthquake data duplication"""
+        logging.info("📊 Storing clustering results and hazard zones to database...")
+
+        conn = None
         try:
-            engine = create_engine(self.db_connection)
-            
-            # Clear existing clustering results
-            with engine.begin() as conn:
-                conn.execute(text("DELETE FROM earthquake_clusters"))
-                conn.execute(text("DELETE FROM hazard_zones"))
-                logging.info("✅ Cleared existing clustering data")
-            
-            # Store cluster results for earthquakes that have cluster assignments
-            cluster_records = []
-            clustered_df = df[df['cluster_id'].notna() & (df['cluster_id'] != -1)]
-            
-            for _, row in clustered_df.iterrows():
-                # Find the cluster analysis for this cluster_id
-                cluster_info = next((c for c in cluster_analysis if c['cluster_id'] == row['cluster_id']), None)
-                
-                if cluster_info:
-                    cluster_record = {
-                        'id': row['id'],
-                        'cluster_id': int(row['cluster_id']),
-                        'cluster_label': cluster_info['cluster_label'],
-                        'risk_zone': cluster_info['risk_zone'],
-                        'centroid_lat': cluster_info['centroid_lat'],
-                        'centroid_lon': cluster_info['centroid_lon'],
-                        'cluster_size': cluster_info['size'],
-                        'avg_magnitude': cluster_info['avg_magnitude']
-                    }
-                    cluster_records.append(cluster_record)
-            
-            # Insert cluster records
-            if cluster_records:
-                cluster_df = pd.DataFrame(cluster_records)
-                cluster_df.to_sql(
-                    'earthquake_clusters',
-                    engine,
-                    if_exists='append',
-                    index=False
-                )
-                logging.info(f"✅ Stored {len(cluster_records)} cluster assignments with ML labeling")
-            
-            # Store aggregated hazard zones
-            hazard_zones = []
-            for cluster in cluster_analysis:
-                hazard_zone = {
-                    'risk_level': cluster['risk_zone'],
-                    'avg_magnitude': cluster['avg_magnitude'],
-                    'event_count': cluster['size'],
-                    'center_lat': cluster['centroid_lat'],
-                    'center_lon': cluster['centroid_lon'],
-                    'boundary_coordinates': f'{{"lat": {cluster["centroid_lat"]}, "lon": {cluster["centroid_lon"]}}}'
-                }
-                hazard_zones.append(hazard_zone)
-            
-            if hazard_zones:
-                hazard_df = pd.DataFrame(hazard_zones)
-                hazard_df.to_sql(
-                    'hazard_zones',
-                    engine,
-                    if_exists='append',
-                    index=False
-                )
-                logging.info(f"✅ Stored {len(hazard_zones)} hazard zones")
-            
-            # Log cluster summary
-            logging.info(f"📊 Hybrid Clustering Summary:")
-            for cluster in cluster_analysis:
-                logging.info(f"   Cluster {cluster['cluster_id']}: {cluster['size']} events, Risk: {cluster['risk_zone']} (ML-labeled)")
-            
-        except Exception as e:
-            logging.error(f"❌ Clustering results storage failed: {e}")
+            conn = psycopg2.connect(self.db_connection)
+
+            cluster_df = cluster_analysis.copy()
+            hazard_df = self._create_hazard_zones(cluster_analysis)
+
+            cluster_df_final = cluster_df.replace({np.nan: None, pd.NaT: None})
+            hazard_df_final = hazard_df.replace({np.nan: None, pd.NaT: None})
+
+            with conn.cursor() as cursor:
+                logging.info("Clearing existing clustering and hazard data...")
+                cursor.execute("DELETE FROM earthquake_clusters")
+                cursor.execute("DELETE FROM hazard_zones")
+                logging.info("✅ Cleared existing data.")
+
+                if not cluster_df_final.empty:
+                    logging.info(f"Inserting {len(cluster_df_final)} records into earthquake_clusters...")
+                    cluster_insert_query = f"""
+                        INSERT INTO earthquake_clusters ({', '.join(cluster_df_final.columns)})
+                        VALUES %s
+                    """
+                    cluster_tuples = [tuple(row) for row in cluster_df_final.itertuples(index=False)]
+                    psycopg2.extras.execute_values(cursor, cluster_insert_query, cluster_tuples, page_size=1000)
+                    logging.info("✅ Cluster data inserted.")
+
+                if not hazard_df_final.empty:
+                    logging.info(f"Inserting {len(hazard_df_final)} records into hazard_zones...")
+                    hazard_insert_query = f"""
+                        INSERT INTO hazard_zones ({', '.join(hazard_df_final.columns)})
+                        VALUES %s
+                    """
+                    hazard_tuples = [tuple(row) for row in hazard_df_final.itertuples(index=False)]
+                    psycopg2.extras.execute_values(cursor, hazard_insert_query, hazard_tuples, page_size=1000)
+                    logging.info("✅ Hazard zone data inserted.")
+
+                conn.commit()
+                logging.info("✅ Clustering results and hazard zones successfully stored and committed.")
+
+        except (Exception, psycopg2.DatabaseError) as error:
+            logging.error(f"❌ Clustering results storage failed: {error}")
+            if conn:
+                conn.rollback()
             raise
+        finally:
+            if conn:
+                conn.close()

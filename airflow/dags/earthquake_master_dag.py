@@ -75,49 +75,81 @@ def run_spatial_processing(**context):
         logging.error(f"❌ Spatial processing failed: {e}")
         raise
 
+
 def load_to_database(**context):
-    """Step 3: Load processed data to PostgreSQL"""
     logging.info("📊 Loading data to PostgreSQL...")
-    
+
     try:
         import pandas as pd
-        from sqlalchemy import create_engine, text
-        
-        df = pd.read_csv('/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv')
-        logging.info(f"📊 Read {len(df)} records from processed file")
-        
-        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
+        import numpy as np
+        import psycopg2
+        import psycopg2.extras
+
+        input_path = '/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv'
+        df = pd.read_csv(input_path)
+        logging.info(f"📊 Read {len(df)} records from {input_path}")
 
         if 'time' in df.columns:
             df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
-        
+
         db_columns = [
             'id', 'magnitude', 'latitude', 'longitude', 'depth', 'time',
             'place', 'spatial_density', 'hazard_score', 'region',
             'magnitude_category', 'depth_category'
         ]
-        
+
         available_cols = [col for col in db_columns if col in df.columns]
         df_clean = df[available_cols].copy()
-        
-        # Gunakan koneksi manual lalu tutup sebelum to_sql
-        with engine.connect() as conn:
-            conn.execute(text("DELETE FROM earthquake_clusters"))
-            conn.execute(text("DELETE FROM hazard_zones"))
-            conn.execute(text("DELETE FROM earthquakes_processed"))
-            logging.info("✅ Cleared existing data")
-        # Pastikan koneksi sudah tertutup sebelum to_sql
 
-        df_clean.to_sql(
-            'earthquakes_processed',
-            engine,
-            if_exists='append',
-            index=False,
-            method='multi'
-        )
-        
-        logging.info(f"✅ Loaded {len(df_clean)} records to database")
-        return len(df_clean)
+        df_final = df_clean.replace({np.nan: None, pd.NaT: None})
+
+        conn = None
+        try:
+            conn = psycopg2.connect(
+                host="postgres",
+                port="5432",
+                dbname="magnitudr",
+                user="postgres",
+                password="earthquake123"
+            )
+
+            with conn.cursor() as cursor:
+                logging.info("Clearing existing data from target tables...")
+                cursor.execute("DELETE FROM earthquake_clusters")
+                cursor.execute("DELETE FROM hazard_zones")
+                cursor.execute("DELETE FROM earthquakes_processed")
+                logging.info("✅ Cleared existing data")
+
+                logging.info(f"Inserting {len(df_final)} records into earthquakes_processed...")
+
+                insert_query = f"""
+                    INSERT INTO earthquakes_processed ({', '.join(df_final.columns)})
+                    VALUES %s
+                """
+
+                data_tuples = [tuple(row) for row in df_final.itertuples(index=False)]
+
+                psycopg2.extras.execute_values(
+                    cursor,
+                    insert_query,
+                    data_tuples,
+                    page_size=1000
+                )
+
+                conn.commit()
+                logging.info(f"✅ Loaded {len(df_final)} records to database")
+
+        except (Exception, psycopg2.DatabaseError) as error:
+            logging.error(f"❌ Database operation failed: {error}")
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+        return len(df_final)
+
     except Exception as e:
         logging.error(f"❌ Database loading failed: {e}")
         raise

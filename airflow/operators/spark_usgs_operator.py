@@ -58,9 +58,15 @@ class SparkUSGSDataOperator(BaseOperator):
             processed_df = self._spark_data_processing(spark_df)
 
             # Convert back to Pandas for compatibility with downstream pipeline
+            # Workaround: convert Spark timestamp columns to string first to avoid Pandas dtype casting error
+            processed_df = processed_df.withColumn('time', col('time').cast('string'))
+            processed_df = processed_df.withColumn('extraction_timestamp', col('extraction_timestamp').cast('string'))
             final_df = processed_df.toPandas()
-            final_df['time'] = pd.to_datetime(final_df['time'], errors='coerce')
-            final_df['extraction_timestamp'] = pd.to_datetime(final_df['extraction_timestamp'], errors='coerce')
+            # Explicitly convert to datetime64[ns] in Pandas
+            if 'time' in final_df.columns:
+                final_df['time'] = pd.to_datetime(final_df['time'], errors='coerce')
+            if 'extraction_timestamp' in final_df.columns:
+                final_df['extraction_timestamp'] = pd.to_datetime(final_df['extraction_timestamp'], errors='coerce')
 
             # Apply Great Expectations validation
             if self.strict_validation:

@@ -87,7 +87,7 @@ def load_to_database(**context):
         logging.info(f"📊 Read {len(df)} records from processed file")
         
         engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
-        
+
         if 'time' in df.columns:
             df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
         
@@ -100,12 +100,14 @@ def load_to_database(**context):
         available_cols = [col for col in db_columns if col in df.columns]
         df_clean = df[available_cols].copy()
         
-        with engine.begin() as conn:
+        # Gunakan koneksi manual lalu tutup sebelum to_sql
+        with engine.connect() as conn:
             conn.execute(text("DELETE FROM earthquake_clusters"))
             conn.execute(text("DELETE FROM hazard_zones"))
             conn.execute(text("DELETE FROM earthquakes_processed"))
             logging.info("✅ Cleared existing data")
-        
+        # Pastikan koneksi sudah tertutup sebelum to_sql
+
         df_clean.to_sql(
             'earthquakes_processed',
             engine,
@@ -116,7 +118,6 @@ def load_to_database(**context):
         
         logging.info(f"✅ Loaded {len(df_clean)} records to database")
         return len(df_clean)
-        
     except Exception as e:
         logging.error(f"❌ Database loading failed: {e}")
         raise

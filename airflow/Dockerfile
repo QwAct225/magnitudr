@@ -8,11 +8,11 @@ RUN apt-get update && apt-get install -y \
     g++ \
     git \
     curl \
-    openjdk-11-jdk-headless \
+    openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # Set JAVA_HOME for Spark
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 ENV PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.9-src.zip:$PYTHONPATH

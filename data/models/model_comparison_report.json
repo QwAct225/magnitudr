@@ -2,17 +2,17 @@
   "best_model": "RandomForest",
   "model_comparison": {
     "RandomForest": {
-      "test_accuracy": 1.0,
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1_score": 1.0
+      "test_accuracy": 0.8465711278438993,
+      "precision": 0.9588091126563416,
+      "recall": 0.8465711278438993,
+      "f1_score": 0.8891251591605188
     },
     "LogisticRegression": {
-      "test_accuracy": 0.996114304217599,
-      "precision": 0.9962855163877445,
-      "recall": 0.996114304217599,
-      "f1_score": 0.9961601384577469
+      "test_accuracy": 0.613796453728443,
+      "precision": 0.8510835480498108,
+      "recall": 0.6137964537284432,
+      "f1_score": 0.6948593149058628
     }
   },
-  "training_timestamp": "2025-06-21T15:35:11.000554"
+  "training_timestamp": "2025-06-21T15:39:27.838878"
 }

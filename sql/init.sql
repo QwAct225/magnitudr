@@ -1,13 +1,12 @@
--- Production-ready database schema for earthquake analysis
--- PostGIS extension (optional - only if needed for spatial operations)
+-- Skema database final untuk analisis gempa
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Table 1: Processed Earthquake Data (after ETL)
+-- Tabel 1: Data Gempa yang Telah Diproses
 CREATE TABLE IF NOT EXISTS earthquakes_processed (
     id VARCHAR(100) PRIMARY KEY,
     magnitude DECIMAL(4,2),
     latitude DECIMAL(10,7),
-    longitude DECIMAL(10,7), 
+    longitude DECIMAL(10,7),
     depth DECIMAL(8,3),
     time TIMESTAMP WITH TIME ZONE,
     place TEXT,
@@ -19,7 +18,7 @@ CREATE TABLE IF NOT EXISTS earthquakes_processed (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table 2: DBSCAN Cluster Results
+-- Tabel 2: Hasil Klastering DBSCAN (dengan tambahan max_magnitude)
 CREATE TABLE IF NOT EXISTS earthquake_clusters (
     id VARCHAR(100) REFERENCES earthquakes_processed(id),
     cluster_id INTEGER,
@@ -29,11 +28,12 @@ CREATE TABLE IF NOT EXISTS earthquake_clusters (
     centroid_lon DECIMAL(10,7),
     cluster_size INTEGER,
     avg_magnitude DECIMAL(4,2),
+    max_magnitude DECIMAL(4,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, cluster_id)
 );
 
--- Table 3: Aggregated Hazard Zones
+-- Tabel 3: Agregasi Zona Bahaya
 CREATE TABLE IF NOT EXISTS hazard_zones (
     zone_id SERIAL PRIMARY KEY,
     risk_level VARCHAR(20),
@@ -46,17 +46,17 @@ CREATE TABLE IF NOT EXISTS hazard_zones (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table 4: ML Model Predictions
-CREATE TABLE IF NOT EXISTS earthquake_predictions (
+-- Tabel 4: Klasifikasi Risiko (menggabungkan init dan migrate)
+CREATE TABLE IF NOT EXISTS earthquake_risk_classifications (
     earthquake_id VARCHAR(100) REFERENCES earthquakes_processed(id),
-    predicted_risk_zone VARCHAR(20),
-    prediction_confidence DECIMAL(6,4),
+    classified_risk_zone VARCHAR(20),
+    classification_confidence DECIMAL(6,4),
     model_version VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (earthquake_id, model_version)
 );
 
--- Table 5: ML Model Metadata
+-- Tabel 5: Metadata Model ML
 CREATE TABLE IF NOT EXISTS ml_model_metadata (
     model_name VARCHAR(100),
     model_type VARCHAR(50),
@@ -69,18 +69,18 @@ CREATE TABLE IF NOT EXISTS ml_model_metadata (
     PRIMARY KEY (model_name, created_at)
 );
 
--- Indexes for performance
+-- Indexes untuk performa (disesuaikan dengan nama tabel dan kolom baru)
 CREATE INDEX IF NOT EXISTS idx_earthquakes_location ON earthquakes_processed(latitude, longitude);
 CREATE INDEX IF NOT EXISTS idx_earthquakes_magnitude ON earthquakes_processed(magnitude);
 CREATE INDEX IF NOT EXISTS idx_earthquakes_time ON earthquakes_processed(time);
 CREATE INDEX IF NOT EXISTS idx_clusters_zone ON earthquake_clusters(risk_zone);
 CREATE INDEX IF NOT EXISTS idx_hazard_risk ON hazard_zones(risk_level);
-CREATE INDEX IF NOT EXISTS idx_predictions_confidence ON earthquake_predictions(prediction_confidence);
+CREATE INDEX IF NOT EXISTS idx_risk_classifications_confidence ON earthquake_risk_classifications(classification_confidence);
 CREATE INDEX IF NOT EXISTS idx_model_metadata_performance ON ml_model_metadata(f1_score);
 
--- Create a view for easy dashboard queries
+-- View untuk query dashboard (disesuaikan dengan nama tabel dan kolom baru)
 CREATE OR REPLACE VIEW earthquake_summary AS
-SELECT 
+SELECT
     e.id,
     e.magnitude,
     e.latitude,
@@ -91,18 +91,12 @@ SELECT
     c.risk_zone,
     c.cluster_id,
     c.cluster_label,
-    p.predicted_risk_zone,
-    p.prediction_confidence
+    p.classified_risk_zone,
+    p.classification_confidence
 FROM earthquakes_processed e
 LEFT JOIN earthquake_clusters c ON e.id = c.id
-LEFT JOIN earthquake_predictions p ON e.id = p.earthquake_id;
+LEFT JOIN earthquake_risk_classifications p ON e.id = p.earthquake_id;
 
 -- Grant permissions
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
-
--- Clear any existing demo data (production safety)
-DELETE FROM earthquake_clusters WHERE id LIKE 'demo_%';
-DELETE FROM earthquake_predictions WHERE earthquake_id LIKE 'demo_%';
-DELETE FROM hazard_zones WHERE risk_level = 'Demo';
-DELETE FROM earthquakes_processed WHERE id LIKE 'demo_%';

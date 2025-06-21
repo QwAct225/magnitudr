@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 import pandas as pd
+import numpy as np
 import os
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
@@ -50,7 +51,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models for API responses - FIXED NAMESPACE ISSUES
+# Pydantic models for API responses
 class EarthquakeData(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     
@@ -204,24 +205,33 @@ async def health_check():
 
 @app.get("/earthquakes", tags=["Data"])
 def get_earthquakes(limit: int = 100):
-    """Mendapatkan daftar data gempa yang telah diproses."""
+    """Mendapatkan daftar data gempa yang telah diproses beserta risk zone-nya."""
     if engine is None:
         raise HTTPException(status_code=503, detail="Koneksi database tidak tersedia.")
 
     query = text("""
         SELECT 
-            id, magnitude, latitude, longitude, depth, time, place,
-            spatial_density, hazard_score, region,
-            magnitude_category, depth_category, risk_zone
-        FROM earthquakes_processed 
-        ORDER BY time DESC 
+            id, 
+            magnitude, 
+            latitude, 
+            longitude, 
+            depth, 
+            region, 
+            hazard_score,
+            risk_zone,
+            cluster_id
+        FROM earthquake_summary 
+        WHERE risk_zone IS NOT NULL
+        ORDER BY magnitude DESC 
         LIMIT :limit
     """)
 
     try:
         with engine.connect() as connection:
-            df = pd.read_sql(query, connection)
+            df = pd.read_sql(query, connection, params={"limit": limit})
+            df.replace({pd.NaT: None, np.nan: None}, inplace=True)
             return df.to_dict(orient='records')
+
     except Exception as e:
         logger.error(f"Error saat mengambil data gempa: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {e}")
@@ -367,13 +377,18 @@ def get_stats():
             total_clusters = connection.execute(
                 text("SELECT COUNT(DISTINCT cluster_id) FROM earthquake_clusters")).scalar()
 
+            high_risk_zones_query = text(
+                "SELECT COUNT(DISTINCT cluster_id) FROM earthquake_clusters WHERE risk_zone IN ('High', 'Extreme')")
+            high_risk_zones = connection.execute(high_risk_zones_query).scalar() or 0
+
             risk_distribution_query = text(
-                "SELECT classified_risk_zone, COUNT(*) as count FROM earthquake_risk_classifications GROUP BY classified_risk_zone")
+                "SELECT risk_zone, COUNT(DISTINCT id) as count FROM earthquake_clusters GROUP BY risk_zone")
             risk_distribution = pd.read_sql(risk_distribution_query, connection).to_dict('records')
 
             return {
                 "total_earthquakes": total_earthquakes,
                 "total_clusters": total_clusters,
+                "high_risk_zones": high_risk_zones,
                 "risk_distribution": risk_distribution
             }
     except Exception as e:

@@ -96,17 +96,9 @@ class DBSCANClusterOperator(BaseOperator):
 
         df_engineered = self._engineer_features_for_prediction(df)
 
-        cluster_agg = df.groupby('cluster_id').agg(
-            cluster_size=('id', 'count'),
-            avg_magnitude=('magnitude', 'mean'),
-            max_magnitude=('magnitude', 'max')
-        ).reset_index()
-
-        df_engineered = pd.merge(df_engineered, cluster_agg, on='cluster_id', how='left')
-
         final_feature_order = [
             'latitude', 'longitude', 'magnitude', 'depth', 'spatial_density',
-            'hazard_score', 'cluster_size', 'avg_magnitude', 'max_magnitude',
+            'hazard_score',
             'distance_from_jakarta', 'magnitude_depth_ratio', 'shallow_earthquake'
         ]
 
@@ -141,7 +133,7 @@ class DBSCANClusterOperator(BaseOperator):
             centroid_lon=('longitude', 'mean')
         ).reset_index()
 
-        df_merged = pd.merge(df, summary_stats, on='cluster_id', how='left', suffixes=('_event', '_cluster'))
+        df_merged = pd.merge(df, summary_stats, on='cluster_id', how='left')
         df_merged['cluster_label'] = df_merged['cluster_id'].apply(lambda x: f'Cluster-{x}')
 
         return df_merged

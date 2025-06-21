@@ -42,7 +42,6 @@ def _load_training_data():
     conn = None
     try:
         conn = psycopg2.connect(DB_CONNECTION_STRING)
-
         query = """
         SELECT 
             p.id, p.magnitude, p.depth, p.latitude, p.longitude, 
@@ -52,17 +51,14 @@ def _load_training_data():
         JOIN earthquake_clusters c ON p.id = c.id
         WHERE c.risk_zone IS NOT NULL AND c.risk_zone != 'Unknown';
         """
-
         df = pd.read_sql(query, conn)
         logging.info(f"📊 Berhasil memuat {len(df)} sampel latih")
-
     except (Exception, psycopg2.DatabaseError) as e:
         logging.error(f"❌ Kueri database untuk data latih gagal: {e}")
         return pd.DataFrame()
     finally:
         if conn:
             conn.close()
-
     return df
 
 
@@ -132,8 +128,21 @@ def train_models_with_comparison(**context):
     X_test_scaled = scaler.transform(X_test)
 
     models = {
-        'RandomForest': RandomForestClassifier(random_state=42, n_estimators=100, max_depth=10),
-        'LogisticRegression': LogisticRegression(random_state=42, solver='lbfgs', max_iter=1000)
+        'RandomForest': RandomForestClassifier(
+            random_state=42,
+            n_estimators=100,
+            max_depth=6,
+            min_samples_leaf=10,
+            max_features='sqrt',
+            class_weight='balanced'
+        ),
+        'LogisticRegression': LogisticRegression(
+            random_state=42,
+            solver='lbfgs',
+            max_iter=1000,
+            C=0.1,
+            class_weight='balanced'
+        )
     }
 
     model_comparison = {}
@@ -147,7 +156,7 @@ def train_models_with_comparison(**context):
         'LogisticRegression': lr_metrics
     }
 
-    best_model_name = max(model_comparison, key=lambda k: model_comparison[k]['test_accuracy'])
+    best_model_name = max(model_comparison, key=lambda k: model_comparison[k]['f1_score'])
     best_model = rf_model if best_model_name == 'RandomForest' else lr_model
 
     logging.info(f"🏆 Model terbaik dipilih: {best_model_name}")
@@ -191,7 +200,7 @@ def generate_ml_comparison_visualization(**context):
         ax.set_title('Perbandingan Akurasi Model', fontsize=16)
         ax.set_ylabel('Akurasi', fontsize=12)
         ax.set_xlabel('Model', fontsize=12)
-        ax.set_ylim(0, 1)
+        ax.set_ylim(0.8, 1.0)
 
         plt.tight_layout()
         plt.savefig(VIZ_DIR / "ml_accuracy_comparison.png", dpi=300)

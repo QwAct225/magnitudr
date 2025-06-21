@@ -208,8 +208,15 @@ def get_earthquakes(limit: int = 100):
     if engine is None:
         raise HTTPException(status_code=503, detail="Koneksi database tidak tersedia.")
 
-    query = text(
-        f"SELECT id, magnitude, latitude, longitude, depth, place, time FROM earthquakes_processed ORDER BY time DESC LIMIT {limit}")
+    query = text("""
+        SELECT 
+            id, magnitude, latitude, longitude, depth, time, place,
+            spatial_density, hazard_score, region,
+            magnitude_category, depth_category, risk_zone
+        FROM earthquakes_processed 
+        ORDER BY time DESC 
+        LIMIT :limit
+    """)
 
     try:
         with engine.connect() as connection:

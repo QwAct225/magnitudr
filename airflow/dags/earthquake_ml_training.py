@@ -113,8 +113,6 @@ def train_models_with_comparison(**context):
     ]
     target_col = 'risk_zone'
 
-    logging.info(f"Training model with {len(feature_cols)} features: {feature_cols}")
-
     X = engineered_df[feature_cols]
     y = engineered_df[target_col]
 
@@ -131,18 +129,12 @@ def train_models_with_comparison(**context):
 
     models = {
         'RandomForest': RandomForestClassifier(
-            random_state=42,
-            n_estimators=100,
-            max_depth=8,
-            min_samples_leaf=3,
-            class_weight='balanced'
+            random_state=42, n_estimators=100, max_depth=8,
+            min_samples_leaf=3, class_weight='balanced'
         ),
         'LogisticRegression': LogisticRegression(
-            random_state=42,
-            solver='lbfgs',
-            max_iter=1000,
-            C=0.5,
-            class_weight='balanced'
+            random_state=42, solver='lbfgs', max_iter=1000,
+            C=0.5, class_weight='balanced'
         )
     }
 
@@ -152,13 +144,11 @@ def train_models_with_comparison(**context):
     lr_model, lr_metrics = _train_and_evaluate_model(models['LogisticRegression'], 'LogisticRegression', X_train_scaled,
                                                      y_train_encoded, X_test_scaled, y_test_encoded)
 
-    model_comparison = {
-        'RandomForest': rf_metrics,
-        'LogisticRegression': lr_metrics
-    }
+    model_comparison = {'RandomForest': rf_metrics, 'LogisticRegression': lr_metrics}
 
     best_model_name = max(model_comparison, key=lambda k: model_comparison[k]['f1_score'])
     best_model = rf_model if best_model_name == 'RandomForest' else lr_model
+    best_model_metrics = model_comparison[best_model_name]
 
     logging.info(f"🏆 Model terbaik dipilih: {best_model_name}")
 
@@ -175,6 +165,34 @@ def train_models_with_comparison(**context):
 
     with open(MODEL_DIR / "model_comparison_report.json", 'w') as f:
         json.dump(report_data, f, indent=2)
+
+    conn_db = None
+    try:
+        conn_db = psycopg2.connect(DB_CONNECTION_STRING)
+        with conn_db.cursor() as cursor:
+            logging.info(f"💾 Menyimpan metadata model {best_model_name} ke database...")
+            insert_query = """
+                INSERT INTO ml_model_metadata (model_name, model_type, accuracy, precision_score, recall_score, f1_score, training_samples)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+            model_type = 'RandomForest' if best_model_name == 'RandomForest' else 'LogisticRegression'
+            record_to_insert = (
+                best_model_name,
+                model_type,
+                best_model_metrics['test_accuracy'],
+                best_model_metrics['precision'],
+                best_model_metrics['recall'],
+                best_model_metrics['f1_score'],
+                len(X_train)
+            )
+            cursor.execute(insert_query, record_to_insert)
+            conn_db.commit()
+            logging.info("✅ Metadata model berhasil disimpan.")
+    except (Exception, psycopg2.DatabaseError) as error:
+        logging.error(f"❌ Gagal menyimpan metadata model: {error}")
+        if conn_db: conn_db.rollback()
+    finally:
+        if conn_db: conn_db.close()
 
     logging.info("✅ Pelatihan ML dengan perbandingan model selesai.")
     context['ti'].xcom_push(key='model_comparison_report', value=report_data)

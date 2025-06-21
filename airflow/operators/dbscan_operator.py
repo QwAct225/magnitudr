@@ -159,23 +159,42 @@ class DBSCANClusterOperator(BaseOperator):
         try:
             conn = psycopg2.connect(self.db_connection)
 
-            schema_columns = [
+            schema_columns_clusters = [
                 'id', 'cluster_id', 'cluster_label', 'risk_zone',
                 'centroid_lat', 'centroid_lon', 'cluster_size', 'avg_magnitude',
                 'max_magnitude'
             ]
-            df_final = df_to_store[schema_columns].copy()
-            df_final.replace({np.nan: None, pd.NaT: None}, inplace=True)
+            df_final_clusters = df_to_store[schema_columns_clusters].copy()
+            df_final_clusters.replace({np.nan: None, pd.NaT: None}, inplace=True)
+
+            df_to_store['classification_confidence'] = 0.95  # Placeholder
+            df_to_store['model_version'] = '1.0.0'  # Placeholder
+            schema_columns_classifications = ['id', 'risk_zone', 'classification_confidence', 'model_version']
+            df_final_classifications = df_to_store[schema_columns_classifications].copy()
 
             with conn.cursor() as cursor:
                 self._clear_target_tables()
-                logging.info(f"Inserting {len(df_final)} records into earthquake_clusters...")
-                insert_query = f"INSERT INTO earthquake_clusters ({', '.join(df_final.columns)}) VALUES %s"
-                data_tuples = [tuple(row) for row in df_final.itertuples(index=False)]
-                psycopg2.extras.execute_values(cursor, insert_query, data_tuples, page_size=1000)
+
+                logging.info(f"Inserting {len(df_final_clusters)} records into earthquake_clusters...")
+                insert_query_clusters = f"INSERT INTO earthquake_clusters ({', '.join(df_final_clusters.columns)}) VALUES %s"
+                tuples_clusters = [tuple(row) for row in df_final_clusters.itertuples(index=False)]
+                psycopg2.extras.execute_values(cursor, insert_query_clusters, tuples_clusters, page_size=1000)
                 logging.info("✅ Cluster data inserted.")
 
-                hazard_df = self._create_hazard_zones(df_final)
+                if not df_final_classifications.empty:
+                    logging.info(
+                        f"Inserting {len(df_final_classifications)} records into earthquake_risk_classifications...")
+                    insert_query_classifications = """
+                        INSERT INTO earthquake_risk_classifications (earthquake_id, classified_risk_zone, classification_confidence, model_version)
+                        VALUES %s
+                    """
+                    tuples_classifications = [tuple(row) for row in df_final_classifications.itertuples(index=False)]
+                    psycopg2.extras.execute_values(cursor, insert_query_classifications, tuples_classifications,
+                                                   page_size=1000)
+                    logging.info("✅ Risk classification data inserted.")
+
+                # Insert ke hazard_zones
+                hazard_df = self._create_hazard_zones(df_final_clusters)
                 if not hazard_df.empty:
                     logging.info(f"Inserting {len(hazard_df)} records into hazard_zones...")
                     hazard_insert_query = f"INSERT INTO hazard_zones ({', '.join(hazard_df.columns)}) VALUES %s"
@@ -184,9 +203,11 @@ class DBSCANClusterOperator(BaseOperator):
                     logging.info("✅ Hazard zone data inserted.")
 
                 conn.commit()
-                logging.info("✅ Clustering results and hazard zones successfully stored and committed.")
+                logging.info("✅ Clustering results and related data successfully stored and committed.")
         except (Exception, psycopg2.DatabaseError) as error:
             logging.error(f"❌ Clustering results storage failed: {error}", exc_info=True)
+            if conn: conn.rollback()
+            raise
         finally:
             if conn: conn.close()
 

@@ -12,9 +12,6 @@ from operators.ml_classification_operator import EarthquakeMLClassificationOpera
 
 
 class DBSCANClusterOperator(BaseOperator):
-    """
-    Hybrid DBSCAN operator - final corrected version for clustering and ML labeling.
-    """
 
     @apply_defaults
     def __init__(
@@ -24,7 +21,7 @@ class DBSCANClusterOperator(BaseOperator):
             model_path: str,
             scaler_path: str,
             label_encoder_path: str,
-            eps: float = 0.1,
+            eps: float = 0.004,
             min_samples: int = 5,
             *args, **kwargs
     ):
@@ -38,70 +35,84 @@ class DBSCANClusterOperator(BaseOperator):
         self.min_samples = min_samples
 
     def execute(self, context):
-        """
-        Main execution logic: Load -> Cluster -> Analyze -> Merge -> Store.
-        """
-        try:
-            logging.info("🔬 Starting DBSCAN clustering process...")
-            df_events = self._load_and_prepare_data()
+        logging.info("🔬 Starting DBSCAN clustering process...")
+        df_events = self._load_and_prepare_data()
 
-            if df_events.empty:
-                logging.warning("Skipping DBSCAN clustering due to empty input data.")
-                return 0
+        if df_events.empty:
+            logging.warning("Skipping DBSCAN clustering due to empty input data.")
+            return 0
 
-            coordinates = df_events[['latitude', 'longitude']].values
-            db = DBSCAN(eps=self.eps, min_samples=self.min_samples, algorithm='ball_tree', metric='haversine').fit(
-                np.radians(coordinates))
+        coordinates = df_events[['latitude', 'longitude']].values
+        db = DBSCAN(eps=self.eps, min_samples=self.min_samples, algorithm='ball_tree', metric='haversine').fit(
+            np.radians(coordinates))
 
-            df_events['cluster_id'] = db.labels_
-            logging.info(
-                f"✅ DBSCAN clustering completed. Found {len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)} clusters.")
+        df_events['cluster_id'] = db.labels_
+        logging.info(
+            f"✅ DBSCAN clustering completed. Found {len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)} clusters.")
 
-            df_cluster_summary = self._analyze_and_predict_clusters(df_events)
+        df_clustered_events = df_events[df_events['cluster_id'] != -1].copy()
 
-            if df_cluster_summary.empty:
-                logging.info("No clusters were formed. Skipping storage.")
-                self._clear_target_tables()
-                return 0
+        if df_clustered_events.empty:
+            logging.info("No clusters were formed. Skipping storage.")
+            self._clear_target_tables()
+            return 0
 
-            df_merged = pd.merge(df_events, df_cluster_summary, on='cluster_id', how='left')
-            df_final_to_store = df_merged[df_merged['cluster_id'] != -1].copy()
+        df_with_predictions = self._predict_risk_zones(df_clustered_events)
 
-            if not df_final_to_store.empty:
-                self._store_clustering_results(df_final_to_store)
-            else:
-                logging.info("No clustered events to store after filtering.")
-                self._clear_target_tables()
+        df_cluster_summary = self._create_cluster_summary(df_with_predictions)
 
-            logging.info(f"✅ Hybrid DBSCAN clustering with ML labeling fully completed.")
-            return len(df_cluster_summary)
+        df_final_to_store = pd.merge(df_with_predictions, df_cluster_summary, on='cluster_id', how='left',
+                                     suffixes=('', '_summary'))
 
-        except Exception as e:
-            logging.error(f"❌ Hybrid DBSCAN clustering failed: {e}", exc_info=True)
-            raise
+        if not df_final_to_store.empty:
+            self._store_clustering_results(df_final_to_store)
+        else:
+            logging.info("No clustered events to store after filtering.")
+            self._clear_target_tables()
+
+        logging.info(f"✅ Hybrid DBSCAN clustering with ML labeling fully completed.")
+        return len(df_cluster_summary)
 
     def _load_and_prepare_data(self):
         logging.info(f"Loading data from {self.input_path}")
         df = pd.read_csv(self.input_path)
-        required_cols = ['id', 'latitude', 'longitude', 'magnitude', 'depth']
+        required_cols = ['id', 'latitude', 'longitude', 'magnitude', 'depth', 'spatial_density', 'hazard_score']
         if not all(col in df.columns for col in required_cols):
             logging.error(f"Input CSV is missing one of the required columns: {required_cols}.")
             return pd.DataFrame()
         return df
 
-    def _analyze_and_predict_clusters(self, df):
-        logging.info("🔬 Analyzing clusters and predicting risk zones...")
+    def _engineer_features_for_prediction(self, df):
+        logging.info("🔧 Engineering features for prediction...")
+        df_processed = df.copy()
 
-        df_clustered_only = df[df['cluster_id'] != -1].copy()
-        if df_clustered_only.empty:
-            return pd.DataFrame()
+        df_processed['distance_from_jakarta'] = np.sqrt(
+            (df_processed['latitude'] + 6.2088) ** 2 + (df_processed['longitude'] - 106.8456) ** 2)
+        df_processed['magnitude_depth_ratio'] = df_processed['magnitude'] / (df_processed['depth'] + 1)
+        df_processed['shallow_earthquake'] = (df_processed['depth'] < 70).astype(int)
 
-        cluster_summary = df_clustered_only.groupby('cluster_id').agg(
-            cluster_size=('magnitude', 'count'),
-            avg_magnitude=('magnitude', 'mean'),
-            centroid_lat=('latitude', 'mean'),
-            centroid_lon=('longitude', 'mean')
+        df_processed.fillna(df_processed.median(numeric_only=True), inplace=True)
+        return df_processed
+
+    def _predict_risk_zones(self, df):
+        logging.info("🤖 Predicting risk zones for new clusters...")
+
+        df_engineered = self._engineer_features_for_prediction(df)
+
+        cluster_agg = df.groupby('cluster_id').agg(
+            cluster_size=('id', 'count'),
+            avg_magnitude=('magnitude', 'mean')
         ).reset_index()
+
+        df_engineered = pd.merge(df_engineered, cluster_agg, on='cluster_id', how='left')
+
+        final_feature_order = [
+            'latitude', 'longitude', 'magnitude', 'depth', 'spatial_density',
+            'hazard_score', 'cluster_size', 'avg_magnitude', 'distance_from_jakarta',
+            'magnitude_depth_ratio', 'shallow_earthquake'
+        ]
+
+        X_predict = df_engineered[final_feature_order]
 
         try:
             model = joblib.load(self.model_path)
@@ -109,25 +120,29 @@ class DBSCANClusterOperator(BaseOperator):
             label_encoder = joblib.load(self.label_encoder_path)
         except FileNotFoundError as e:
             logging.error(f"Model/Scaler/Encoder file not found: {e}. Cannot predict risk zones.")
-            cluster_summary['risk_zone'] = 'Unknown'
-            cluster_summary['cluster_label'] = cluster_summary['cluster_id'].apply(lambda x: f'Cluster-{x}')
-            return cluster_summary
+            df['risk_zone'] = 'Unknown'
+            return df
 
-        features_to_predict = cluster_summary[['avg_magnitude']]
-        features_scaled = scaler.transform(features_to_predict)
+        X_scaled = scaler.transform(X_predict)
 
-        predictions_encoded = model.predict(features_scaled)
+        predictions_encoded = model.predict(X_scaled)
         predictions_decoded = label_encoder.inverse_transform(predictions_encoded)
 
-        cluster_summary['risk_zone'] = predictions_decoded
-        # **PERBAIKAN UTAMA**: Membuat 'cluster_label' di sini, di tempat yang benar.
-        cluster_summary['cluster_label'] = cluster_summary['cluster_id'].apply(lambda x: f'Cluster-{x}')
-        logging.info("✅ ML-based risk zone labeling completed.")
+        df['risk_zone'] = predictions_decoded
+        logging.info("✅ Prediction completed.")
+        return df
 
-        return cluster_summary
+    def _create_cluster_summary(self, df_with_predictions):
+        logging.info("Creating cluster summary...")
+        summary = df_with_predictions.groupby('cluster_id').agg(
+            centroid_lat=('latitude', 'mean'),
+            centroid_lon=('longitude', 'mean'),
+            risk_zone=('risk_zone', lambda x: x.mode()[0])
+        ).reset_index()
+        summary['cluster_label'] = summary['cluster_id'].apply(lambda x: f'Cluster-{x}')
+        return summary
 
     def _clear_target_tables(self):
-        """Helper function to clear tables."""
         conn = None
         try:
             conn = psycopg2.connect(self.db_connection)
@@ -139,7 +154,6 @@ class DBSCANClusterOperator(BaseOperator):
         except (Exception, psycopg2.DatabaseError) as error:
             logging.error(f"❌ Failed to clear target tables: {error}")
             if conn: conn.rollback()
-            raise
         finally:
             if conn: conn.close()
 
@@ -148,6 +162,13 @@ class DBSCANClusterOperator(BaseOperator):
         conn = None
         try:
             conn = psycopg2.connect(self.db_connection)
+
+            cluster_stats = df_to_store.groupby('cluster_id').agg(
+                cluster_size=('id', 'count'),
+                avg_magnitude=('magnitude', 'mean')
+            ).reset_index()
+
+            df_to_store = pd.merge(df_to_store, cluster_stats, on='cluster_id', how='left')
 
             schema_columns = [
                 'id', 'cluster_id', 'cluster_label', 'risk_zone',
@@ -158,7 +179,6 @@ class DBSCANClusterOperator(BaseOperator):
 
             with conn.cursor() as cursor:
                 self._clear_target_tables()
-
                 logging.info(f"Inserting {len(df_final)} records into earthquake_clusters...")
                 insert_query = f"INSERT INTO earthquake_clusters ({', '.join(df_final.columns)}) VALUES %s"
                 data_tuples = [tuple(row) for row in df_final.itertuples(index=False)]
@@ -177,15 +197,12 @@ class DBSCANClusterOperator(BaseOperator):
                 logging.info("✅ Clustering results and hazard zones successfully stored and committed.")
         except (Exception, psycopg2.DatabaseError) as error:
             logging.error(f"❌ Clustering results storage failed: {error}", exc_info=True)
-            if conn: conn.rollback()
-            raise
         finally:
             if conn: conn.close()
 
     def _create_hazard_zones(self, df_final_clusters):
         if df_final_clusters.empty or 'risk_zone' not in df_final_clusters.columns:
             return pd.DataFrame()
-
         hazard_summary = df_final_clusters[df_final_clusters['risk_zone'].isin(['High', 'Extreme'])] \
             .groupby('risk_zone').agg(
             center_lat=('centroid_lat', 'mean'),
@@ -193,14 +210,11 @@ class DBSCANClusterOperator(BaseOperator):
             avg_magnitude=('avg_magnitude', 'mean'),
             event_count=('id', 'count')
         ).reset_index()
-
         if hazard_summary.empty:
             return pd.DataFrame()
-
         hazard_summary.rename(columns={'risk_zone': 'risk_level'}, inplace=True)
         hazard_summary['boundary_coordinates'] = None
         hazard_summary['area_km2'] = None
-
         return hazard_summary[
             ['risk_level', 'avg_magnitude', 'event_count', 'boundary_coordinates', 'center_lat', 'center_lon',
              'area_km2']]

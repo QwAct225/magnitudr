@@ -5,12 +5,11 @@ import logging
 import pandas as pd
 import numpy as np
 import joblib
-from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, f1_score, precision_score, recall_score, \
-    confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report
 import json
 import os
 import psycopg2
@@ -19,7 +18,6 @@ import seaborn as sns
 from pathlib import Path
 import sys
 
-# Menambahkan path root proyek untuk impor absolut jika diperlukan di masa depan
 sys.path.append('/opt/airflow')
 
 default_args = {
@@ -39,23 +37,17 @@ VIZ_DIR = Path("/opt/airflow/magnitudr/data/plots")
 MODEL_OUTPUT_PATH = str(MODEL_DIR / "earthquake_model.pkl")
 
 
-# ====================================================================================
-# SEMUA LOGIKA ML DITEMPATKAN DI DALAM FUNGSI-FUNGSI DI BAWAH INI
-# ====================================================================================
-
 def _load_training_data():
-    """Memuat data latih dari database."""
     logging.info("📊 Memuat data latih dari database...")
     conn = None
     try:
-        # PERBAIKAN: Menggunakan psycopg2 untuk koneksi database
         conn = psycopg2.connect(DB_CONNECTION_STRING)
 
         query = """
         SELECT 
             p.id, p.magnitude, p.depth, p.latitude, p.longitude, 
             p.spatial_density, p.hazard_score,
-            c.risk_zone, c.cluster_size, c.avg_magnitude
+            c.risk_zone, c.cluster_size, c.avg_magnitude, c.max_magnitude
         FROM earthquakes_processed p
         JOIN earthquake_clusters c ON p.id = c.id
         WHERE c.risk_zone IS NOT NULL AND c.risk_zone != 'Unknown';
@@ -71,14 +63,10 @@ def _load_training_data():
         if conn:
             conn.close()
 
-    if df.empty:
-        return pd.DataFrame()
-
     return df
 
 
 def _engineer_features(df):
-    """Melakukan rekayasa fitur."""
     logging.info("🔧 Melakukan rekayasa fitur risiko gempa...")
     df_processed = df.copy()
 
@@ -94,7 +82,6 @@ def _engineer_features(df):
 
 
 def _train_and_evaluate_model(model, model_name, X_train, y_train, X_test, y_test):
-    """Melatih dan mengevaluasi satu model."""
     logging.info(f"--- Melatih dan mengevaluasi model: {model_name} ---")
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
@@ -114,7 +101,6 @@ def _train_and_evaluate_model(model, model_name, X_train, y_train, X_test, y_tes
 
 
 def train_models_with_comparison(**context):
-    """Fungsi utama yang dipanggil oleh PythonOperator."""
     logging.info("🤖 Memulai Pelatihan ML Mingguan dengan Perbandingan Model...")
 
     df = _load_training_data()
@@ -126,8 +112,8 @@ def train_models_with_comparison(**context):
 
     feature_cols = [
         'latitude', 'longitude', 'magnitude', 'depth', 'spatial_density',
-        'hazard_score', 'cluster_size', 'avg_magnitude', 'distance_from_jakarta',
-        'magnitude_depth_ratio', 'shallow_earthquake'
+        'hazard_score', 'cluster_size', 'avg_magnitude', 'max_magnitude',
+        'distance_from_jakarta', 'magnitude_depth_ratio', 'shallow_earthquake'
     ]
     target_col = 'risk_zone'
 
@@ -145,28 +131,27 @@ def train_models_with_comparison(**context):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    # Inisialisasi model
-    rf_model = RandomForestClassifier(random_state=42, n_estimators=100, max_depth=10)
-    lr_model = LogisticRegression(random_state=42, solver='lbfgs', max_iter=1000)
+    models = {
+        'RandomForest': RandomForestClassifier(random_state=42, n_estimators=100, max_depth=10),
+        'LogisticRegression': LogisticRegression(random_state=42, solver='lbfgs', max_iter=1000)
+    }
 
-    # Melatih dan mengevaluasi kedua model
-    rf_model, rf_metrics = _train_and_evaluate_model(rf_model, 'RandomForest', X_train_scaled, y_train_encoded,
-                                                     X_test_scaled, y_test_encoded)
-    lr_model, lr_metrics = _train_and_evaluate_model(lr_model, 'LogisticRegression', X_train_scaled, y_train_encoded,
-                                                     X_test_scaled, y_test_encoded)
+    model_comparison = {}
+    rf_model, rf_metrics = _train_and_evaluate_model(models['RandomForest'], 'RandomForest', X_train_scaled,
+                                                     y_train_encoded, X_test_scaled, y_test_encoded)
+    lr_model, lr_metrics = _train_and_evaluate_model(models['LogisticRegression'], 'LogisticRegression', X_train_scaled,
+                                                     y_train_encoded, X_test_scaled, y_test_encoded)
 
     model_comparison = {
         'RandomForest': rf_metrics,
         'LogisticRegression': lr_metrics
     }
 
-    # Memilih model terbaik berdasarkan akurasi
     best_model_name = max(model_comparison, key=lambda k: model_comparison[k]['test_accuracy'])
     best_model = rf_model if best_model_name == 'RandomForest' else lr_model
 
     logging.info(f"🏆 Model terbaik dipilih: {best_model_name}")
 
-    # Menyimpan artefak model
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(best_model, MODEL_OUTPUT_PATH)
     joblib.dump(scaler, MODEL_DIR / "earthquake_model_scaler.pkl")
@@ -187,7 +172,6 @@ def train_models_with_comparison(**context):
 
 
 def generate_ml_comparison_visualization(**context):
-    """Membuat visualisasi dari hasil perbandingan model."""
     try:
         report_data = context['ti'].xcom_pull(key='model_comparison_report', task_ids='train_models_with_comparison')
         if not report_data:
@@ -231,6 +215,7 @@ def generate_ml_comparison_visualization(**context):
     except Exception as e:
         logging.error(f"❌ Visualisasi ML gagal: {e}")
         raise
+
 
 with DAG(
         'earthquake_weekly_ml_training',

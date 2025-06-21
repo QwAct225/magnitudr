@@ -8,8 +8,11 @@ import pandas as pd
 import numpy as np
 import psycopg2
 import psycopg2.extras
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Menambahkan direktori root proyek ke path Python (CARA YANG BENAR)
 sys.path.append('/opt/airflow')
 
 default_args = {
@@ -32,60 +35,50 @@ dag = DAG(
     tags=['earthquake', 'master', 'production', 'spark']
 )
 
+DB_CONNECTION_STRING = 'postgresql://postgres:earthquake123@postgres:5432/magnitudr'
+
 
 def run_spark_usgs_ingestion(**context):
-    """Step 1: Spark-Enhanced USGS Data Ingestion"""
     logging.info("🌍 Starting Spark-enhanced USGS data ingestion...")
     try:
-        # Impor absolut dari direktori root
         from operators.spark_usgs_operator import SparkUSGSDataOperator
-
         spark_usgs_operator = SparkUSGSDataOperator(
             task_id='spark_usgs_ingestion',
             output_path='/opt/airflow/magnitudr/data/airflow_output/raw_earthquake_data.csv',
-            start_year=2016,
-            min_magnitude=1.0,
-            target_size_mb=64.0,
-            strict_validation=False
+            start_year=2016, min_magnitude=1.0, target_size_mb=64.0, strict_validation=False
         )
         result = spark_usgs_operator.execute(context)
         logging.info(f"✅ Spark USGS ingestion completed: {result} records")
         return result
     except Exception as e:
-        logging.error(f"❌ Spark USGS ingestion failed: {e}")
+        logging.error(f"❌ Spark USGS ingestion failed: {e}", exc_info=True)
         raise
 
 
 def run_spatial_processing(**context):
-    """Step 2: Spatial Processing and Feature Engineering"""
     logging.info("Starting spatial processing...")
     try:
-        # Impor absolut dari direktori root
         from operators.spatial_operator import SpatialDensityOperator
-
         spatial_operator = SpatialDensityOperator(
             task_id='spatial_processing',
             input_path='/opt/airflow/magnitudr/data/airflow_output/raw_earthquake_data.csv',
             output_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
-            grid_size=0.1,
-            enable_validation=True
+            grid_size=0.1, enable_validation=True
         )
         result = spatial_operator.execute(context)
         logging.info(f"✅ Spatial processing completed: {result} records")
         return result
     except Exception as e:
-        logging.error(f"❌ Spatial processing failed: {e}")
+        logging.error(f"❌ Spatial processing failed: {e}", exc_info=True)
         raise
 
 
 def load_to_database(**context):
-    """Step 3: Load processed data to PostgreSQL (FIXED VERSION)"""
     logging.info("📊 Loading data to PostgreSQL...")
     try:
         input_path = '/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv'
         df = pd.read_csv(input_path)
         logging.info(f"📊 Read {len(df)} records from {input_path}")
-
         if 'time' in df.columns:
             df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
 
@@ -94,18 +87,12 @@ def load_to_database(**context):
             'place', 'spatial_density', 'hazard_score', 'region',
             'magnitude_category', 'depth_category'
         ]
-
         available_cols = [col for col in db_columns if col in df.columns]
         df_clean = df[available_cols].copy()
-
         df_final = df_clean.replace({np.nan: None, pd.NaT: None})
-
         conn = None
         try:
-            conn = psycopg2.connect(
-                host="postgres", port="5432", dbname="magnitudr",
-                user="postgres", password="earthquake123"
-            )
+            conn = psycopg2.connect(DB_CONNECTION_STRING)
             with conn.cursor() as cursor:
                 logging.info("Clearing existing data from target tables...")
                 cursor.execute("DELETE FROM earthquake_clusters")
@@ -113,132 +100,114 @@ def load_to_database(**context):
                 cursor.execute("DELETE FROM earthquakes_processed")
                 logging.info("✅ Cleared existing data")
 
-                logging.info(f"Inserting {len(df_final)} records into earthquakes_processed...")
                 insert_query = f"INSERT INTO earthquakes_processed ({', '.join(df_final.columns)}) VALUES %s"
                 data_tuples = [tuple(row) for row in df_final.itertuples(index=False)]
                 psycopg2.extras.execute_values(cursor, insert_query, data_tuples, page_size=1000)
-
                 conn.commit()
                 logging.info(f"✅ Loaded {len(df_final)} records to database")
         except (Exception, psycopg2.DatabaseError) as error:
-            logging.error(f"❌ Database operation failed: {error}")
+            logging.error(f"❌ Database operation failed: {error}", exc_info=True)
             if conn: conn.rollback()
             raise
         finally:
             if conn: conn.close()
         return len(df_final)
     except Exception as e:
-        logging.error(f"❌ Database loading failed: {e}")
+        logging.error(f"❌ Database loading failed: {e}", exc_info=True)
         raise
 
 
 def run_hybrid_dbscan_clustering(**context):
-    """Step 4: Hybrid DBSCAN Clustering with ML Labeling"""
     logging.info("🔬 Starting Hybrid DBSCAN clustering with ML labeling...")
     try:
         from operators.dbscan_operator import DBSCANClusterOperator
-
-        # Panggil operator dengan parameter yang benar dan lengkap
         dbscan_operator = DBSCANClusterOperator(
             task_id='hybrid_dbscan_clustering',
             input_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
-            db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
+            db_connection=DB_CONNECTION_STRING,
             model_path='/opt/airflow/magnitudr/data/models/earthquake_model.pkl',
             scaler_path='/opt/airflow/magnitudr/data/models/earthquake_model_scaler.pkl',
             label_encoder_path='/opt/airflow/magnitudr/data/models/earthquake_model_label_encoder.pkl',
-            eps=0.1,
-            min_samples=5
+            eps=0.1, min_samples=5
         )
-
         result = dbscan_operator.execute(context)
         logging.info(f"✅ Hybrid DBSCAN clustering completed: {result} clusters with ML labeling")
         return result
-
     except Exception as e:
         logging.error(f"❌ Hybrid DBSCAN clustering failed: {e}", exc_info=True)
         raise
 
+
 def run_data_visualization(**context):
-    """Step 5: Data Visualization and EDA"""
     logging.info("📊 Starting data visualization...")
+    conn = None
     try:
-        from sqlalchemy import create_engine
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import json
+        # PERBAIKAN: Menggunakan psycopg2 secara langsung
+        conn = psycopg2.connect(DB_CONNECTION_STRING)
+        logging.info("✅ Database connection for visualization established using psycopg2.")
 
-        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
         earthquake_query = "SELECT * FROM earthquakes_processed LIMIT 10000"
-        df_earthquakes = pd.read_sql(earthquake_query, engine)
+        df_earthquakes = pd.read_sql(earthquake_query, conn)
         cluster_query = "SELECT * FROM earthquake_clusters"
-        df_clusters = pd.read_sql(cluster_query, engine)
+        df_clusters = pd.read_sql(cluster_query, conn)
 
-        viz_dir = '/opt/airflow/magnitudr/data/plots'
-        os.makedirs(viz_dir, exist_ok=True)
+    except (Exception, psycopg2.DatabaseError) as e:
+        logging.error(f"❌ Data loading for visualization failed: {e}", exc_info=True)
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+    try:
+        viz_dir = Path('/opt/airflow/magnitudr/data/plots')
+        viz_dir.mkdir(parents=True, exist_ok=True)
 
         plt.style.use('dark_background')
         sns.set_palette("husl")
 
         plt.figure(figsize=(10, 6))
         plt.hist(df_earthquakes['magnitude'], bins=30, alpha=0.7, color='orange')
-        plt.title('Earthquake Magnitude Distribution (Spark-Processed)', fontsize=14)
+        plt.title('Earthquake Magnitude Distribution', fontsize=14)
         plt.xlabel('Magnitude')
         plt.ylabel('Frequency')
         plt.tight_layout()
-        plt.savefig(f'{viz_dir}/magnitude_distribution.png', dpi=300, bbox_inches='tight')
+        plt.savefig(viz_dir / 'magnitude_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-        if not df_clusters.empty:
+        if not df_clusters.empty and 'risk_zone' in df_clusters.columns:
             plt.figure(figsize=(8, 6))
             risk_counts = df_clusters['risk_zone'].value_counts()
             colors = ['#E74C3C', '#FF6B35', '#F39C12', '#27AE60']
             plt.pie(risk_counts.values, labels=risk_counts.index, autopct='%1.1f%%', colors=colors)
             plt.title('Risk Zone Distribution (ML-Labeled)', fontsize=14)
             plt.tight_layout()
-            plt.savefig(f'{viz_dir}/risk_zone_distribution.png', dpi=300, bbox_inches='tight')
+            plt.savefig(viz_dir / 'risk_zone_distribution.png', dpi=300, bbox_inches='tight')
             plt.close()
 
         plt.figure(figsize=(12, 8))
         scatter = plt.scatter(df_earthquakes['longitude'], df_earthquakes['latitude'], c=df_earthquakes['magnitude'],
                               cmap='Reds', alpha=0.6)
         plt.colorbar(scatter, label='Magnitude')
-        plt.title('Earthquake Geographic Distribution (Spark+ML Pipeline)', fontsize=14)
+        plt.title('Earthquake Geographic Distribution', fontsize=14)
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
         plt.tight_layout()
-        plt.savefig(f'{viz_dir}/geographic_distribution.png', dpi=300, bbox_inches='tight')
+        plt.savefig(viz_dir / 'geographic_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
 
         logging.info(f"✅ Generated 3 visualization plots in {viz_dir}")
+        return str(viz_dir)
 
-        viz_summary = {
-            'visualization_timestamp': datetime.now().isoformat(), 'plots_generated': 3,
-            'earthquake_samples': len(df_earthquakes), 'cluster_samples': len(df_clusters),
-            'output_directory': viz_dir, 'processing_method': 'Spark + ML Hybrid',
-            'plots': ['magnitude_distribution.png', 'risk_zone_distribution.png', 'geographic_distribution.png']
-        }
-
-        with open(f'{viz_dir}/visualization_summary.json', 'w') as f:
-            json.dump(viz_summary, f, indent=2)
-
-        logging.info("✅ Data visualization completed")
-        return len(viz_summary['plots'])
     except Exception as e:
-        logging.error(f"❌ Data visualization failed: {e}")
+        logging.error(f"❌ Data visualization failed: {e}", exc_info=True)
         raise
 
 
 def generate_master_report(**context):
-    """Step 6: Generate master pipeline report with Spark and ML integration"""
     logging.info("📋 Generating master pipeline report...")
+    conn = None
     try:
-        from pathlib import Path
-        import json
-
-        conn = psycopg2.connect(
-            host="postgres", port="5432", database="magnitudr",
-            user="postgres", password="earthquake123"
-        )
+        conn = psycopg2.connect(DB_CONNECTION_STRING)
         cursor = conn.cursor()
 
         cursor.execute("SELECT COUNT(*) FROM earthquakes_processed")
@@ -254,64 +223,28 @@ def generate_master_report(**context):
         ml_models_trained = cursor.fetchone()[0]
 
         cursor.close()
-        conn.close()
-
-        try:
-            metrics_path = '/opt/airflow/magnitudr/data/airflow_output/model_comparison_report.json'
-            if os.path.exists(metrics_path):
-                with open(metrics_path, 'r') as f:
-                    ml_metrics = json.load(f)
-                best_model = ml_metrics.get('best_model', 'Unknown')
-                best_model_metrics = ml_metrics.get('model_comparison', {}).get(best_model, {})
-                report_ml_metrics = {
-                    'best_model': best_model, 'accuracy': best_model_metrics.get('test_accuracy', 0),
-                    'f1_score': best_model_metrics.get('f1_score', 0),
-                    'precision': best_model_metrics.get('precision', 0),
-                    'recall': best_model_metrics.get('recall', 0), 'models_trained': ml_models_trained
-                }
-            else:
-                report_ml_metrics = {'status': 'model_not_found', 'models_trained': ml_models_trained}
-        except Exception as e:
-            report_ml_metrics = {'status': 'error', 'message': str(e)}
-
-        report = {
-            'pipeline_name': 'Magnitudr Master Production Pipeline with Spark + ML',
-            'execution_timestamp': datetime.now().isoformat(), 'status': 'SUCCESS',
-            'schedule': 'Daily at 02:00 WIB', 'architecture': 'Hybrid Spark + DBSCAN + ML',
-            'data_statistics': {
-                'total_earthquakes': total_earthquakes, 'total_clusters': total_clusters,
-                'high_risk_zones': high_risk_zones, 'risk_distribution': risk_distribution,
-                'data_coverage': '2016-2025 (9 years)', 'processing_method': 'Apache Spark + ML Classification'
-            },
-            'ml_model_performance': report_ml_metrics,
-            'system_endpoints': {
-                'api_docs': 'http://localhost:8000/docs', 'api_health': 'http://localhost:8000/health',
-                'ml_comparison': 'http://localhost:8000/ml/model-comparison',
-                'pipeline_status': 'http://localhost:8000/pipeline/status', 'dashboard': 'http://localhost:8501',
-                'airflow': 'http://localhost:8080'
-            },
-            'production_ready': True, 'data_volume_compliant': total_earthquakes > 10000
-        }
 
         report_path = Path("/opt/airflow/magnitudr/data/airflow_output/master_pipeline_report.json")
-        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report = {
+            'pipeline_name': 'Magnitudr Master Production Pipeline',
+            'execution_timestamp': datetime.now().isoformat(),
+            'data_statistics': {'total_earthquakes': total_earthquakes, 'total_clusters': total_clusters},
+        }
 
+        report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2)
 
-        logging.info("🎉 MASTER PIPELINE WITH SPARK + ML COMPLETED!")
-        logging.info(
-            f"📊 Earthquakes: {total_earthquakes:,}, 🔬 Clusters: {total_clusters}, 🚨 High-risk zones: {high_risk_zones}")
-        logging.info(f"🚀 Processed with: Apache Spark, 🤖 ML Models: {ml_models_trained} trained")
-        logging.info(f"🎯 Dashboard: http://localhost:8501, 🤖 ML API: http://localhost:8000/ml/model-comparison")
-
+        logging.info("🎉 MASTER PIPELINE COMPLETED!")
         return str(report_path)
-    except Exception as e:
-        logging.error(f"❌ Master report failed: {e}")
+    except (Exception, psycopg2.DatabaseError) as e:
+        logging.error(f"❌ Master report failed: {e}", exc_info=True)
         raise
+    finally:
+        if conn:
+            conn.close()
 
 
-# Define tasks
 task_spark_ingestion = PythonOperator(task_id='spark_usgs_data_ingestion', python_callable=run_spark_usgs_ingestion,
                                       dag=dag)
 task_processing = PythonOperator(task_id='spatial_processing', python_callable=run_spatial_processing, dag=dag)
@@ -321,5 +254,4 @@ task_clustering = PythonOperator(task_id='hybrid_dbscan_clustering', python_call
 task_visualization = PythonOperator(task_id='data_visualization', python_callable=run_data_visualization, dag=dag)
 task_report = PythonOperator(task_id='generate_master_report', python_callable=generate_master_report, dag=dag)
 
-# Enhanced pipeline flow with Spark integration
 task_spark_ingestion >> task_processing >> task_database >> task_clustering >> task_visualization >> task_report

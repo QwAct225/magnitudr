@@ -168,8 +168,7 @@ if api_healthy:
             st.sidebar.metric("📊 Live Data", "Active")
             st.sidebar.metric("Total Earthquakes", f"{stats_data['total_earthquakes']:,}")
             st.sidebar.metric("Clusters", stats_data['total_clusters'])
-            st.sidebar.metric("High-Risk Zones", stats_data['high_risk_zones'])
-            
+
         except Exception as e:
             st.error(f"Data processing error: {e}")
             df_earthquakes = None

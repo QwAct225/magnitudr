@@ -151,7 +151,6 @@ def get_db_connection():
         logger.error(f"Database connection failed: {e}")
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-# API Endpoints
 @app.get("/", summary="API Health Check")
 async def root():
     """Health check endpoint with system information"""
@@ -202,136 +201,52 @@ async def health_check():
             "timestamp": datetime.now().isoformat()
         }
 
-@app.get("/earthquakes", response_model=List[EarthquakeData], summary="Get Earthquake Data")
-async def get_earthquakes(
-    limit: int = Query(default=1000, le=10000, description="Maximum number of records"),
-    min_magnitude: Optional[float] = Query(default=None, description="Minimum magnitude filter"),
-    region: Optional[str] = Query(default=None, description="Region filter"),
-    risk_zone: Optional[str] = Query(default=None, description="Risk zone filter")
-):
-    """Get earthquake data with advanced filtering"""
-    try:
-        query = """
-        SELECT 
-            e.id, e.magnitude, e.latitude, e.longitude, e.depth, e.time,
-            COALESCE(e.place, '') as place, 
-            COALESCE(e.spatial_density, 0) as spatial_density, 
-            COALESCE(e.hazard_score, 0) as hazard_score, 
-            COALESCE(e.region, 'Unknown') as region,
-            COALESCE(e.magnitude_category, 'Unknown') as magnitude_category, 
-            COALESCE(e.depth_category, 'Unknown') as depth_category,
-            COALESCE(c.risk_zone, 'Unknown') as risk_zone
-        FROM earthquakes_processed e
-        LEFT JOIN earthquake_clusters c ON e.id = c.id
-        WHERE 1=1
-        """
-        
-        params = {}
-        
-        if min_magnitude is not None:
-            query += " AND e.magnitude >= :min_magnitude"
-            params['min_magnitude'] = min_magnitude
-            
-        if region:
-            query += " AND e.region = :region"
-            params['region'] = region
-            
-        if risk_zone:
-            query += """
-            AND e.id IN (
-                SELECT c.id FROM earthquake_clusters c 
-                WHERE c.risk_zone = :risk_zone
-            )
-            """
-            params['risk_zone'] = risk_zone
-        
-        query += " ORDER BY e.time DESC NULLS LAST LIMIT :limit"
-        params['limit'] = limit
-        
-        with get_db_connection() as conn:
-            result = conn.execute(text(query), params)
-            data = result.fetchall()
-            
-        earthquakes = []
-        for row in data:
-            earthquakes.append(EarthquakeData(
-                id=str(row[0]),
-                magnitude=safe_float(row[1]),
-                latitude=safe_float(row[2]),
-                longitude=safe_float(row[3]),
-                depth=safe_float(row[4]),
-                time=row[5] if row[5] is not None else None,
-                place=str(row[6]) if row[6] else "",
-                spatial_density=safe_float(row[7]),
-                hazard_score=safe_float(row[8]),
-                region=str(row[9]) if row[9] else "Unknown",
-                magnitude_category=str(row[10]) if row[10] else "Unknown",
-                depth_category=str(row[11]) if row[11] else "Unknown",
-                risk_zone=str(row[12]) if row[12] else "Unknown"
-            ))
-        
-        logger.info(f"✅ Retrieved {len(earthquakes)} earthquake records")
-        return earthquakes
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to retrieve earthquakes: {e}")
-        raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 
-@app.get("/clusters", response_model=List[ClusterData], summary="Get Cluster Analysis")
-async def get_clusters(
-    risk_zone: Optional[str] = Query(default=None, description="Filter by risk zone"),
-    min_cluster_size: Optional[int] = Query(default=None, description="Minimum cluster size")
-):
-    """Get DBSCAN clustering results with ML labeling"""
+@app.get("/earthquakes", tags=["Data"])
+def get_earthquakes(limit: int = 100):
+    """Mendapatkan daftar data gempa yang telah diproses."""
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Koneksi database tidak tersedia.")
+
+    query = text(
+        f"SELECT id, magnitude, latitude, longitude, depth, place, time FROM earthquakes_processed ORDER BY time DESC LIMIT {limit}")
+
     try:
-        query = """
-        SELECT 
-            c.id, c.cluster_id, 
-            COALESCE(c.cluster_label, 'Unknown') as cluster_label, 
-            COALESCE(c.risk_zone, 'Unknown') as risk_zone,
-            COALESCE(c.centroid_lat, 0) as centroid_lat, 
-            COALESCE(c.centroid_lon, 0) as centroid_lon, 
-            COALESCE(c.cluster_size, 0) as cluster_size, 
-            COALESCE(c.avg_magnitude, 0) as avg_magnitude
-        FROM earthquake_clusters c
-        WHERE 1=1
-        """
-        
-        params = {}
-        
-        if risk_zone:
-            query += " AND c.risk_zone = :risk_zone"
-            params['risk_zone'] = risk_zone
-            
-        if min_cluster_size:
-            query += " AND c.cluster_size >= :min_cluster_size"
-            params['min_cluster_size'] = min_cluster_size
-        
-        query += " ORDER BY c.cluster_size DESC LIMIT 1000"
-        
-        with get_db_connection() as conn:
-            result = conn.execute(text(query), params)
-            data = result.fetchall()
-        
-        clusters = []
-        for row in data:
-            clusters.append(ClusterData(
-                id=str(row[0]),
-                cluster_id=safe_int(row[1]),
-                cluster_label=str(row[2]),
-                risk_zone=str(row[3]),
-                centroid_lat=safe_float(row[4]),
-                centroid_lon=safe_float(row[5]),
-                cluster_size=safe_int(row[6]),
-                avg_magnitude=safe_float(row[7])
-            ))
-        
-        logger.info(f"✅ Retrieved {len(clusters)} cluster records")
-        return clusters
-        
+        with engine.connect() as connection:
+            df = pd.read_sql(query, connection)
+            return df.to_dict(orient='records')
     except Exception as e:
-        logger.error(f"❌ Failed to retrieve clusters: {e}")
-        raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+        logger.error(f"Error saat mengambil data gempa: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {e}")
+
+
+@app.get("/clusters", tags=["Data"])
+def get_clusters():
+    """Mendapatkan ringkasan data klaster gempa."""
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Koneksi database tidak tersedia.")
+
+    query = text("""
+        SELECT 
+            cluster_id, 
+            cluster_label,
+            risk_zone,
+            centroid_lat,
+            centroid_lon,
+            cluster_size,
+            avg_magnitude,
+            max_magnitude 
+        FROM earthquake_clusters
+    """)
+
+    try:
+        with engine.connect() as connection:
+            df = pd.read_sql(query, connection)
+            df_unique = df.drop_duplicates(subset=['cluster_id']).reset_index(drop=True)
+            return df_unique.to_dict(orient='records')
+    except Exception as e:
+        logger.error(f"Error saat mengambil data klaster: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {e}")
 
 @app.get("/risk-classifications", response_model=List[RiskClassification], summary="Get ML Risk Classifications")
 async def get_risk_classifications(
@@ -432,64 +347,31 @@ async def get_hazard_zones(
         logger.error(f"❌ Failed to retrieve hazard zones: {e}")
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 
-@app.get("/stats", response_model=SystemStats, summary="Get System Statistics")
-async def get_system_stats():
-    """Get comprehensive system statistics with safe decimal handling"""
+
+@app.get("/stats", tags=["Statistics"])
+def get_stats():
+    """Mendapatkan statistik ringkasan dari data gempa."""
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Koneksi database tidak tersedia.")
+
     try:
-        with get_db_connection() as conn:
-            # Get earthquake statistics with safe handling
-            earthquake_result = conn.execute(text("""
-                SELECT 
-                    COUNT(*) as total_earthquakes,
-                    COALESCE(AVG(hazard_score), 0) as avg_hazard_score
-                FROM earthquakes_processed
-            """)).fetchone()
-            
-            # Get cluster statistics
-            cluster_result = conn.execute(text("""
-                SELECT 
-                    COUNT(DISTINCT cluster_id) as total_clusters
-                FROM earthquake_clusters
-                WHERE cluster_id IS NOT NULL
-            """)).fetchone()
-            
-            # Get high-risk zones count  
-            risk_result = conn.execute(text("""
-                SELECT COUNT(*) as high_risk_zones
-                FROM hazard_zones 
-                WHERE risk_level IN ('High', 'Extreme')
-            """)).fetchone()
-            
-            # Safe value extraction with proper decimal handling
-            total_earthquakes = safe_int(earthquake_result[0]) if earthquake_result and earthquake_result[0] else 0
-            avg_hazard = safe_float(earthquake_result[1]) if earthquake_result and earthquake_result[1] else 0.0
-            total_clusters = safe_int(cluster_result[0]) if cluster_result and cluster_result[0] else 0
-            high_risk_zones = safe_int(risk_result[0]) if risk_result and risk_result[0] else 0
-            
-            # Calculate data quality score with bulletproof error handling
-            try:
-                if avg_hazard and avg_hazard > 0:
-                    hazard_float = float(str(avg_hazard))
-                    data_quality = min(hazard_float / 10.0, 1.0)
-                else:
-                    data_quality = 0.0
-            except (TypeError, ValueError, ZeroDivisionError, decimal.InvalidOperation):
-                data_quality = 0.0
-        
-        stats = SystemStats(
-            total_earthquakes=total_earthquakes,
-            total_clusters=total_clusters,
-            high_risk_zones=high_risk_zones,
-            last_update=datetime.now(),
-            data_quality_score=round(data_quality, 3)
-        )
-        
-        logger.info("✅ Retrieved system statistics")
-        return stats
-        
+        with engine.connect() as connection:
+            total_earthquakes = connection.execute(text("SELECT COUNT(*) FROM earthquakes_processed")).scalar()
+            total_clusters = connection.execute(
+                text("SELECT COUNT(DISTINCT cluster_id) FROM earthquake_clusters")).scalar()
+
+            risk_distribution_query = text(
+                "SELECT classified_risk_zone, COUNT(*) as count FROM earthquake_risk_classifications GROUP BY classified_risk_zone")
+            risk_distribution = pd.read_sql(risk_distribution_query, connection).to_dict('records')
+
+            return {
+                "total_earthquakes": total_earthquakes,
+                "total_clusters": total_clusters,
+                "risk_distribution": risk_distribution
+            }
     except Exception as e:
-        logger.error(f"❌ Failed to retrieve statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Statistics query failed: {str(e)}")
+        logger.error(f"Error saat mengambil statistik: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {e}")
 
 @app.get("/ml/model-comparison", summary="Get ML Model Comparison Results")
 async def get_model_comparison():

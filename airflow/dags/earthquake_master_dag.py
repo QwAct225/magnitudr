@@ -87,13 +87,18 @@ def load_to_database(**context):
         logging.info(f"📊 Read {len(df)} records from {input_path}")
 
         if 'time' in df.columns:
-            df['time'] = pd.to_datetime(df['time'], unit='ms', errors='coerce')
-
+            df['time'] = pd.to_datetime(df['time'], errors='coerce', utc=True) 
+            
         db_columns = [
             'id', 'magnitude', 'latitude', 'longitude', 'depth', 'time',
             'place', 'spatial_density', 'hazard_score', 'region',
-            'magnitude_category', 'depth_category'
+            'magnitude_category', 'depth_category', 'cluster_id', 'risk_zone'  
         ]
+
+        if 'cluster_id' not in df.columns:
+            df['cluster_id'] = None 
+        if 'risk_zone' not in df.columns:
+            df['risk_zone'] = 'Unknown' 
 
         available_cols = [col for col in db_columns if col in df.columns]
         df_clean = df[available_cols].copy()
@@ -108,9 +113,13 @@ def load_to_database(**context):
             )
             with conn.cursor() as cursor:
                 logging.info("Clearing existing data from target tables...")
-                cursor.execute("DELETE FROM earthquake_clusters")
+                cursor.execute("DELETE FROM earthquake_clusters CASCADE") 
                 cursor.execute("DELETE FROM hazard_zones")
-                cursor.execute("DELETE FROM earthquakes_processed")
+                cursor.execute("DELETE FROM earthquake_predictions CASCADE")
+                cursor.execute("DELETE FROM ml_model_metadata")
+                cursor.execute("DELETE FROM earthquakes_processed") 
+
+
                 logging.info("✅ Cleared existing data")
 
                 logging.info(f"Inserting {len(df_final)} records into earthquakes_processed...")
@@ -121,14 +130,14 @@ def load_to_database(**context):
                 conn.commit()
                 logging.info(f"✅ Loaded {len(df_final)} records to database")
         except (Exception, psycopg2.DatabaseError) as error:
-            logging.error(f"❌ Database operation failed: {error}")
+            logging.error(f"❌ Database operation failed: {error}", exc_info=True)
             if conn: conn.rollback()
             raise
         finally:
             if conn: conn.close()
         return len(df_final)
     except Exception as e:
-        logging.error(f"❌ Database loading failed: {e}")
+        logging.error(f"❌ Database loading failed: {e}", exc_info=True) 
         raise
 
 
@@ -140,14 +149,15 @@ def run_hybrid_dbscan_clustering(**context):
 
         # Panggil operator dengan parameter yang benar dan lengkap
         dbscan_operator = DBSCANClusterOperator(
-            task_id='hybrid_dbscan_clustering',
+            task_id='hybrid_dbscan_clustering_logic',
             input_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
             db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
             model_path='/opt/airflow/magnitudr/data/models/earthquake_model.pkl',
             scaler_path='/opt/airflow/magnitudr/data/models/earthquake_model_scaler.pkl',
             label_encoder_path='/opt/airflow/magnitudr/data/models/earthquake_model_label_encoder.pkl',
             eps=0.1,
-            min_samples=5
+            min_samples=5,
+            max_rows_to_load=40000
         )
 
         result = dbscan_operator.execute(context)
@@ -161,17 +171,24 @@ def run_hybrid_dbscan_clustering(**context):
 def run_data_visualization(**context):
     """Step 5: Data Visualization and EDA"""
     logging.info("📊 Starting data visualization...")
+    conn = None 
     try:
-        from sqlalchemy import create_engine
         import matplotlib.pyplot as plt
         import seaborn as sns
         import json
+        import psycopg2 
 
-        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
+        db_connection_str = 'postgresql://postgres:earthquake123@postgres:5432/magnitudr'
+        conn = psycopg2.connect(db_connection_str) 
+
         earthquake_query = "SELECT * FROM earthquakes_processed LIMIT 10000"
-        df_earthquakes = pd.read_sql(earthquake_query, engine)
+        df_earthquakes = pd.read_sql(earthquake_query, conn)
+        
         cluster_query = "SELECT * FROM earthquake_clusters"
-        df_clusters = pd.read_sql(cluster_query, engine)
+        df_clusters = pd.read_sql(cluster_query, conn)
+
+        hazard_query = "SELECT * FROM hazard_zones"
+        df_hazard_zones = pd.read_sql(hazard_query, conn)
 
         viz_dir = '/opt/airflow/magnitudr/data/plots'
         os.makedirs(viz_dir, exist_ok=True)
@@ -179,6 +196,7 @@ def run_data_visualization(**context):
         plt.style.use('dark_background')
         sns.set_palette("husl")
 
+        # Plot 1: Magnitude Distribution (sama seperti sebelumnya)
         plt.figure(figsize=(10, 6))
         plt.hist(df_earthquakes['magnitude'], bins=30, alpha=0.7, color='orange')
         plt.title('Earthquake Magnitude Distribution (Spark-Processed)', fontsize=14)
@@ -188,19 +206,30 @@ def run_data_visualization(**context):
         plt.savefig(f'{viz_dir}/magnitude_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-        if not df_clusters.empty:
-            plt.figure(figsize=(8, 6))
+        # Plot 2: Risk Zone Distribution (Diagram Lingkaran)
+        plt.figure(figsize=(8, 6))
+        if not df_clusters.empty and 'risk_zone' in df_clusters.columns:
             risk_counts = df_clusters['risk_zone'].value_counts()
-            colors = ['#E74C3C', '#FF6B35', '#F39C12', '#27AE60']
-            plt.pie(risk_counts.values, labels=risk_counts.index, autopct='%1.1f%%', colors=colors)
-            plt.title('Risk Zone Distribution (ML-Labeled)', fontsize=14)
-            plt.tight_layout()
-            plt.savefig(f'{viz_dir}/risk_zone_distribution.png', dpi=300, bbox_inches='tight')
-            plt.close()
+            if not risk_counts.empty:
+                colors = {'High': '#E74C3C', 'Extreme': '#8E44AD', 'Medium': '#F39C12', 'Low': '#27AE60', 'Unknown': '#BDC3C7'}
+                pie_colors = [colors.get(zone, '#BDC3C7') for zone in risk_counts.index]
+                plt.pie(risk_counts.values, labels=risk_counts.index, autopct='%1.1f%%', colors=pie_colors, startangle=90)
+                plt.title('Risk Zone Distribution (ML-Labeled)', fontsize=14)
+            else:
+                plt.text(0.5, 0.5, "No clusters with risk zones found.", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, color='gray')
+                plt.title('Risk Zone Distribution (ML-Labeled) - No Data', fontsize=14)
+        else:
+            plt.text(0.5, 0.5, "No cluster data available for risk zone distribution.", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, color='gray')
+            plt.title('Risk Zone Distribution (ML-Labeled) - No Data', fontsize=14)
+        plt.tight_layout()
+        plt.savefig(f'{viz_dir}/risk_zone_distribution.png', dpi=300, bbox_inches='tight')
+        plt.close()
 
+
+        # Plot 3: Earthquake Geographic Distribution (Scatter Plot Asli)
         plt.figure(figsize=(12, 8))
         scatter = plt.scatter(df_earthquakes['longitude'], df_earthquakes['latitude'], c=df_earthquakes['magnitude'],
-                              cmap='Reds', alpha=0.6)
+                              cmap='Reds', alpha=0.6, s=df_earthquakes['magnitude']*10) # Ukuran titik berdasarkan magnitudo
         plt.colorbar(scatter, label='Magnitude')
         plt.title('Earthquake Geographic Distribution (Spark+ML Pipeline)', fontsize=14)
         plt.xlabel('Longitude')
@@ -209,13 +238,53 @@ def run_data_visualization(**context):
         plt.savefig(f'{viz_dir}/geographic_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-        logging.info(f"✅ Generated 3 visualization plots in {viz_dir}")
+        # Plot 4 (BARU): Hazard Zone Map - Menyerupai Peta Risiko Streamlit
+        plt.figure(figsize=(12, 8))
+        if not df_hazard_zones.empty:
+            plt.scatter(df_earthquakes['longitude'], df_earthquakes['latitude'], color='grey', alpha=0.1, s=1)
+
+            if 'risk_level' in df_hazard_zones.columns and 'center_lon' in df_hazard_zones.columns and 'center_lat' in df_hazard_zones.columns:
+                risk_colors = {
+                    'Extreme': 'darkred',
+                    'High': 'red',
+                    'Medium': 'orange',
+                    'Low': 'lightgreen',
+                    'Unknown': 'gray'
+                }
+                scatter_hazard = plt.scatter(df_hazard_zones['center_lon'], df_hazard_zones['center_lat'],
+                                            s=df_hazard_zones['event_count'].fillna(1)*5 if 'event_count' in df_hazard_zones.columns else 100,
+                                            c=df_hazard_zones['risk_level'].map(risk_colors),
+                                            alpha=0.8, edgecolors='black', linewidth=0.5,
+                                            label='Hazard Zones')
+                
+                handles = [plt.Line2D([0], [0], marker='o', color='w', label=label, 
+                                      markerfacecolor=risk_colors[label], markersize=10) 
+                           for label in risk_colors if label in df_hazard_zones['risk_level'].unique()]
+                plt.legend(handles=handles, title="Risk Level")
+                
+            plt.title('Hazard Zones (ML-Labeled) Geographic Distribution', fontsize=14)
+            plt.xlabel('Longitude')
+            plt.ylabel('Latitude')
+            plt.grid(True, linestyle='--', alpha=0.7)
+        else:
+            plt.text(0.5, 0.5, "No hazard zone data available.", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, color='gray')
+            plt.title('Hazard Zones - No Data', fontsize=14)
+        plt.tight_layout()
+        plt.savefig(f'{viz_dir}/hazard_zone_map.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+
+        logging.info(f"✅ Generated visualization plots in {viz_dir}")
 
         viz_summary = {
-            'visualization_timestamp': datetime.now().isoformat(), 'plots_generated': 3,
-            'earthquake_samples': len(df_earthquakes), 'cluster_samples': len(df_clusters),
-            'output_directory': viz_dir, 'processing_method': 'Spark + ML Hybrid',
-            'plots': ['magnitude_distribution.png', 'risk_zone_distribution.png', 'geographic_distribution.png']
+            'visualization_timestamp': datetime.now().isoformat(), 
+            'plots_generated': 4,
+            'earthquake_samples': len(df_earthquakes), 
+            'cluster_samples': len(df_clusters),
+            'hazard_zone_samples': len(df_hazard_zones), 
+            'output_directory': viz_dir, 
+            'processing_method': 'Spark + ML Hybrid',
+            'plots': ['magnitude_distribution.png', 'risk_zone_distribution.png', 'geographic_distribution.png', 'hazard_zone_map.png'] # Tambahkan plot baru
         }
 
         with open(f'{viz_dir}/visualization_summary.json', 'w') as f:
@@ -224,8 +293,11 @@ def run_data_visualization(**context):
         logging.info("✅ Data visualization completed")
         return len(viz_summary['plots'])
     except Exception as e:
-        logging.error(f"❌ Data visualization failed: {e}")
+        logging.error(f"❌ Data visualization failed: {e}", exc_info=True)
         raise
+    finally:
+        if conn:
+            conn.close() 
 
 
 def generate_master_report(**context):
@@ -317,7 +389,7 @@ task_spark_ingestion = PythonOperator(task_id='spark_usgs_data_ingestion', pytho
 task_processing = PythonOperator(task_id='spatial_processing', python_callable=run_spatial_processing, dag=dag)
 task_database = PythonOperator(task_id='load_to_database', python_callable=load_to_database, dag=dag)
 task_clustering = PythonOperator(task_id='hybrid_dbscan_clustering', python_callable=run_hybrid_dbscan_clustering,
-                                 dag=dag)
+                                dag=dag)
 task_visualization = PythonOperator(task_id='data_visualization', python_callable=run_data_visualization, dag=dag)
 task_report = PythonOperator(task_id='generate_master_report', python_callable=generate_master_report, dag=dag)
 

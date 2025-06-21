@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS earthquakes_processed (
     region VARCHAR(50),
     magnitude_category VARCHAR(20),
     depth_category VARCHAR(20),
+    -- --- TAMBAHAN KOLOM BARU DI SINI ---
+    cluster_id INTEGER,         -- Kolom untuk ID kluster dari DBSCAN
+    risk_zone VARCHAR(20),      -- Kolom untuk zona risiko
+    -- ---------------------------------
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -46,8 +50,8 @@ CREATE TABLE IF NOT EXISTS hazard_zones (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table 4: ML Model Predictions
-CREATE TABLE IF NOT EXISTS earthquake_predictions (
+-- Table 4: ML Model Predictions (diubah namanya di DAG ML Training)
+CREATE TABLE IF NOT EXISTS earthquake_predictions ( -- Ini mungkin earthquake_risk_classifications sekarang
     earthquake_id VARCHAR(100) REFERENCES earthquakes_processed(id),
     predicted_risk_zone VARCHAR(20),
     prediction_confidence DECIMAL(6,4),
@@ -88,8 +92,9 @@ SELECT
     e.depth,
     e.region,
     e.hazard_score,
-    c.risk_zone,
-    c.cluster_id,
+    c.risk_zone, -- Ini akan join dari earthquake_clusters, bukan kolom e.risk_zone
+    e.risk_zone AS processed_risk_zone_initial, -- Tambahkan ini jika ingin melihat nilai initial di e
+    e.cluster_id AS processed_cluster_id,
     c.cluster_label,
     p.predicted_risk_zone,
     p.prediction_confidence

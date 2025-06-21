@@ -128,7 +128,7 @@ def run_hybrid_dbscan_clustering(**context):
             model_path='/opt/airflow/magnitudr/data/models/earthquake_model.pkl',
             scaler_path='/opt/airflow/magnitudr/data/models/earthquake_model_scaler.pkl',
             label_encoder_path='/opt/airflow/magnitudr/data/models/earthquake_model_label_encoder.pkl',
-            eps=0.1, min_samples=5
+            eps=0.004, min_samples=5
         )
         result = dbscan_operator.execute(context)
         logging.info(f"✅ Hybrid DBSCAN clustering completed: {result} clusters with ML labeling")

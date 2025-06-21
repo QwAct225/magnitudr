@@ -1,11 +1,11 @@
 
         Ringkasan Perbandingan Model ML
         --------------------------------
-        Timestamp: 2025-06-21T15:35:11.000554
+        Timestamp: 2025-06-21T15:39:27.838878
         Model Terbaik: RandomForest
 
         Metrik Performa:
                         Model  test_accuracy  precision    recall  f1_score
-0        RandomForest       1.000000   1.000000  1.000000   1.00000
-1  LogisticRegression       0.996114   0.996286  0.996114   0.99616
+0        RandomForest       0.846571   0.958809  0.846571  0.889125
+1  LogisticRegression       0.613796   0.851084  0.613796  0.694859
         

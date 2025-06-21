@@ -8,11 +8,11 @@
       "f1_score": 1.0
     },
     "LogisticRegression": {
-      "test_accuracy": 0.9999190480045334,
-      "precision": 0.9999190660178834,
-      "recall": 0.9999190480045334,
-      "f1_score": 0.9999190499330715
+      "test_accuracy": 0.996114304217599,
+      "precision": 0.9962855163877445,
+      "recall": 0.996114304217599,
+      "f1_score": 0.9961601384577469
     }
   },
-  "training_timestamp": "2025-06-21T10:04:13.070963"
+  "training_timestamp": "2025-06-21T15:35:11.000554"
 }

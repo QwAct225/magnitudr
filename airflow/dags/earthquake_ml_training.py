@@ -108,10 +108,12 @@ def train_models_with_comparison(**context):
 
     feature_cols = [
         'latitude', 'longitude', 'magnitude', 'depth', 'spatial_density',
-        'hazard_score', 'cluster_size', 'avg_magnitude', 'max_magnitude',
+        'hazard_score',
         'distance_from_jakarta', 'magnitude_depth_ratio', 'shallow_earthquake'
     ]
     target_col = 'risk_zone'
+
+    logging.info(f"Training model with {len(feature_cols)} features: {feature_cols}")
 
     X = engineered_df[feature_cols]
     y = engineered_df[target_col]
@@ -131,16 +133,15 @@ def train_models_with_comparison(**context):
         'RandomForest': RandomForestClassifier(
             random_state=42,
             n_estimators=100,
-            max_depth=6,
-            min_samples_leaf=10,
-            max_features='sqrt',
+            max_depth=8,
+            min_samples_leaf=3,
             class_weight='balanced'
         ),
         'LogisticRegression': LogisticRegression(
             random_state=42,
             solver='lbfgs',
             max_iter=1000,
-            C=0.1,
+            C=0.5,
             class_weight='balanced'
         )
     }

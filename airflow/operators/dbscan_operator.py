@@ -59,10 +59,7 @@ class DBSCANClusterOperator(BaseOperator):
 
         df_with_predictions = self._predict_risk_zones(df_clustered_events)
 
-        df_cluster_summary = self._create_cluster_summary(df_with_predictions)
-
-        df_final_to_store = pd.merge(df_with_predictions, df_cluster_summary, on='cluster_id', how='left',
-                                     suffixes=('', '_summary'))
+        df_final_to_store = self._prepare_data_for_storage(df_with_predictions)
 
         if not df_final_to_store.empty:
             self._store_clustering_results(df_final_to_store)
@@ -71,7 +68,7 @@ class DBSCANClusterOperator(BaseOperator):
             self._clear_target_tables()
 
         logging.info(f"✅ Hybrid DBSCAN clustering with ML labeling fully completed.")
-        return len(df_cluster_summary)
+        return len(df_final_to_store['cluster_id'].unique())
 
     def _load_and_prepare_data(self):
         logging.info(f"Loading data from {self.input_path}")
@@ -132,15 +129,21 @@ class DBSCANClusterOperator(BaseOperator):
         logging.info("✅ Prediction completed.")
         return df
 
-    def _create_cluster_summary(self, df_with_predictions):
-        logging.info("Creating cluster summary...")
-        summary = df_with_predictions.groupby('cluster_id').agg(
+    def _prepare_data_for_storage(self, df):
+        logging.info("Preparing final data structure for database insertion...")
+
+        summary_stats = df.groupby('cluster_id').agg(
+            avg_magnitude=('magnitude', 'mean'),
+            max_magnitude=('magnitude', 'max'),
+            cluster_size=('id', 'count'),
             centroid_lat=('latitude', 'mean'),
-            centroid_lon=('longitude', 'mean'),
-            risk_zone=('risk_zone', lambda x: x.mode()[0])
+            centroid_lon=('longitude', 'mean')
         ).reset_index()
-        summary['cluster_label'] = summary['cluster_id'].apply(lambda x: f'Cluster-{x}')
-        return summary
+
+        df_merged = pd.merge(df, summary_stats, on='cluster_id', how='left')
+        df_merged['cluster_label'] = df_merged['cluster_id'].apply(lambda x: f'Cluster-{x}')
+
+        return df_merged
 
     def _clear_target_tables(self):
         conn = None
@@ -163,16 +166,10 @@ class DBSCANClusterOperator(BaseOperator):
         try:
             conn = psycopg2.connect(self.db_connection)
 
-            cluster_stats = df_to_store.groupby('cluster_id').agg(
-                cluster_size=('id', 'count'),
-                avg_magnitude=('magnitude', 'mean')
-            ).reset_index()
-
-            df_to_store = pd.merge(df_to_store, cluster_stats, on='cluster_id', how='left')
-
             schema_columns = [
                 'id', 'cluster_id', 'cluster_label', 'risk_zone',
-                'centroid_lat', 'centroid_lon', 'cluster_size', 'avg_magnitude'
+                'centroid_lat', 'centroid_lon', 'cluster_size', 'avg_magnitude',
+                'max_magnitude'
             ]
             df_final = df_to_store[schema_columns].copy()
             df_final.replace({np.nan: None, pd.NaT: None}, inplace=True)
@@ -203,6 +200,7 @@ class DBSCANClusterOperator(BaseOperator):
     def _create_hazard_zones(self, df_final_clusters):
         if df_final_clusters.empty or 'risk_zone' not in df_final_clusters.columns:
             return pd.DataFrame()
+
         hazard_summary = df_final_clusters[df_final_clusters['risk_zone'].isin(['High', 'Extreme'])] \
             .groupby('risk_zone').agg(
             center_lat=('centroid_lat', 'mean'),
@@ -210,11 +208,14 @@ class DBSCANClusterOperator(BaseOperator):
             avg_magnitude=('avg_magnitude', 'mean'),
             event_count=('id', 'count')
         ).reset_index()
+
         if hazard_summary.empty:
             return pd.DataFrame()
+
         hazard_summary.rename(columns={'risk_zone': 'risk_level'}, inplace=True)
         hazard_summary['boundary_coordinates'] = None
         hazard_summary['area_km2'] = None
+
         return hazard_summary[
             ['risk_level', 'avg_magnitude', 'event_count', 'boundary_coordinates', 'center_lat', 'center_lon',
              'area_km2']]

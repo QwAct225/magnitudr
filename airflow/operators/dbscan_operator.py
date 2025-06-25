@@ -92,7 +92,7 @@ class DBSCANClusterOperator(BaseOperator):
         return df_processed
 
     def _predict_risk_zones(self, df):
-        logging.info("🤖 Predicting risk zones for new clusters...")
+        logging.info("Predicting risk zones for new clusters...")
 
         df_engineered = self._engineer_features_for_prediction(df)
 
@@ -167,8 +167,8 @@ class DBSCANClusterOperator(BaseOperator):
             df_final_clusters = df_to_store[schema_columns_clusters].copy()
             df_final_clusters.replace({np.nan: None, pd.NaT: None}, inplace=True)
 
-            df_to_store['classification_confidence'] = 0.95  # Placeholder
-            df_to_store['model_version'] = '1.0.0'  # Placeholder
+            df_to_store['classification_confidence'] = 0.95 # Default confidence for all classifications
+            df_to_store['model_version'] = '1.0.0'
             schema_columns_classifications = ['id', 'risk_zone', 'classification_confidence', 'model_version']
             df_final_classifications = df_to_store[schema_columns_classifications].copy()
 

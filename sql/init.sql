@@ -100,3 +100,12 @@ LEFT JOIN earthquake_risk_classifications p ON e.id = p.earthquake_id;
 -- Grant permissions
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
+
+UPDATE earthquake_clusters
+SET risk_zone =
+    CASE
+        WHEN max_magnitude >= 6.5 THEN 'Extreme'
+        WHEN max_magnitude >= 5.5 AND max_magnitude < 6.5 THEN 'High'
+        WHEN max_magnitude >= 4.5 AND max_magnitude < 5.5 THEN 'Moderate'
+        ELSE 'Low'
+    END;

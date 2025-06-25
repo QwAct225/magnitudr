@@ -95,9 +95,12 @@ def load_to_database(**context):
             conn = psycopg2.connect(DB_CONNECTION_STRING)
             with conn.cursor() as cursor:
                 logging.info("Clearing existing data from target tables...")
+
+                cursor.execute("DELETE FROM earthquake_risk_classifications")
                 cursor.execute("DELETE FROM earthquake_clusters")
                 cursor.execute("DELETE FROM hazard_zones")
                 cursor.execute("DELETE FROM earthquakes_processed")
+
                 logging.info("✅ Cleared existing data")
 
                 insert_query = f"INSERT INTO earthquakes_processed ({', '.join(df_final.columns)}) VALUES %s"
@@ -142,7 +145,6 @@ def run_data_visualization(**context):
     logging.info("📊 Starting data visualization...")
     conn = None
     try:
-        # PERBAIKAN: Menggunakan psycopg2 secara langsung
         conn = psycopg2.connect(DB_CONNECTION_STRING)
         logging.info("✅ Database connection for visualization established using psycopg2.")
 

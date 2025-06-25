@@ -1,7 +1,7 @@
 
         Ringkasan Perbandingan Model ML
         --------------------------------
-        Timestamp: 2025-06-21T16:22:25.663702
+        Timestamp: 2025-06-22T00:00:11.828871
         Model Terbaik: RandomForest
 
         Metrik Performa:

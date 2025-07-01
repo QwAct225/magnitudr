@@ -301,4 +301,4 @@ class SpatialDensityOperator(BaseOperator):
         density_score = np.minimum(df['spatial_density'] * 10, 2)
         score += density_score
         
-        return np.minimum(score, 10)  # Cap at 10
+        return np.minimum(score, 10)

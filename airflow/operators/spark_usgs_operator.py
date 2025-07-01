@@ -151,7 +151,7 @@ class SparkUSGSDataOperator(BaseOperator):
                     earthquake = {
                         "id": feature["id"],
                         "place": props.get("place", ""),
-                        "time": props.get("time"),  # Keep as milliseconds timestamp
+                        "time": props.get("time"),
                         "magnitude": props.get("mag"),
                         "longitude": coords[0],
                         "latitude": coords[1],

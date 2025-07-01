@@ -121,7 +121,7 @@ def load_to_database(**context):
 
 
 def run_hybrid_dbscan_clustering(**context):
-    logging.info("🔬 Starting Hybrid DBSCAN clustering with ML labeling...")
+    logging.info("Starting Hybrid DBSCAN clustering with ML labeling...")
     try:
         from operators.dbscan_operator import DBSCANClusterOperator
         dbscan_operator = DBSCANClusterOperator(

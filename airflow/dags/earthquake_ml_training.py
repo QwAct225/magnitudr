@@ -31,7 +31,7 @@ default_args = {
     'catchup': False
 }
 
-DB_CONNECTION_STRING = 'postgresql://postgres:earthquake123@postgres:5432/magnitudr'
+DB_CONNECTION_STRING = os.getenv('DB_CONNECTION_STRING', 'postgresql://postgres:postgres@postgres:5432/magnitudr')
 MODEL_DIR = Path("/opt/airflow/magnitudr/data/models")
 VIZ_DIR = Path("/opt/airflow/magnitudr/data/plots")
 MODEL_OUTPUT_PATH = str(MODEL_DIR / "earthquake_model.pkl")

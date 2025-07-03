@@ -32,7 +32,7 @@ dag = DAG(
 task_dbscan = DBSCANClusterOperator(
     task_id='run_dbscan_clustering',
     input_path='/opt/airflow/magnitudr/data/airflow_output/processed_earthquake_data.csv',
-    db_connection='postgresql://postgres:earthquake123@postgres:5432/magnitudr',
+    db_connection=os.getenv('DB_CONNECTION_STRING', 'postgresql://postgres:postgres@postgres:5432/magnitudr'),
     model_path='/opt/airflow/magnitudr/data/models/earthquake_model.pkl',
     scaler_path='/opt/airflow/magnitudr/data/models/earthquake_model_scaler.pkl',
     label_encoder_path='/opt/airflow/magnitudr/data/models/earthquake_model_label_encoder.pkl',
@@ -51,7 +51,7 @@ def generate_clustering_summary(**context):
     
     try:
         # Create engine
-        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
+        engine = create_engine(os.getenv('DB_CONNECTION_STRING', 'postgresql://postgres:postgres@postgres:5432/magnitudr'))
         
         # Get clustering statistics with proper data types
         with engine.connect() as conn:

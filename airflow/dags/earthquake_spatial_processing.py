@@ -50,7 +50,7 @@ def load_to_postgresql(**context):
         logging.info(f"📊 Read {len(df)} records from processed file")
         
         # Database connection
-        engine = create_engine('postgresql://postgres:earthquake123@postgres:5432/magnitudr')
+        engine = create_engine(os.getenv('DB_CONNECTION_STRING', 'postgresql://postgres:postgres@postgres:5432/magnitudr'))
         
         # Data type conversion and cleaning
         if 'time' in df.columns:

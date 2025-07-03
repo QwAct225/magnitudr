@@ -35,7 +35,7 @@ dag = DAG(
     tags=['earthquake', 'master', 'production', 'spark']
 )
 
-DB_CONNECTION_STRING = 'postgresql://postgres:earthquake123@postgres:5432/magnitudr'
+DB_CONNECTION_STRING = os.getenv('DB_CONNECTION_STRING', 'postgresql://postgres:postgres@postgres:5432/magnitudr')
 
 
 def run_spark_usgs_ingestion(**context):

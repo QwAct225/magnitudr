@@ -12,6 +12,13 @@ data/spark_output/
 data/airflow_output/
 data/plots/
 
+# Generated data outputs
+data/*.csv
+data/reports/*.csv
+data/reports/*.json
+data/reports/*.png
+data/models/model_comparison_report.json
+
 # Environment & secrets
 .env
 *.log
